@@ -43,7 +43,7 @@ test('el mapa de adaptadores traduce cada agente al id de cada vendor', () => {
   const agents = [VENDORS.agents['claude-code'], VENDORS.agents['opencode']].map((c, i) => ({ id: i, ids: c.ids }));
   assert.equal(vendorIds(agents, 'bmad'), 'claude-code,opencode');
   assert.equal(vendorIds(agents, 'openspec'), 'claude,opencode');   // OpenSpec dice "claude", no "claude-code"
-  assert.equal(vendorIds(agents, 'gentle'), 'claude-code,opencode');
+  assert.equal(vendorIds(agents, 'graphify'), 'claude,opencode');   // graphify tiene su propio nombre
 });
 
 test('preflight detecta este entorno como apto', () => {
@@ -975,14 +975,14 @@ test('config.json es del proyecto y local.json de la maquina: lo que cambia por 
 });
 
 test('solo se declaran soportados los agentes probados de punta a punta', () => {
-  // Codex se saco: su toolchain desactualizada hacia fallar gentle-config en cada corrida
+  // Codex se saco: su toolchain desactualizada hacia fallar la configuracion en cada corrida
   // y nunca se probo el flujo completo con el. Soportar a medias es peor que no soportar.
   assert.deepEqual(Object.keys(VENDORS.agents).sort(), ['claude-code', 'opencode']);
   for (const [id, cfg] of Object.entries(VENDORS.agents)) {
     assert.ok(cfg.skills, `${id}: falta dir de skills`);
     assert.ok(cfg.commands, `${id}: falta dir de comandos`);
     assert.ok(cfg.commandStyle, `${id}: falta commandStyle`);
-    for (const v of ['bmad', 'openspec', 'gentle'])
+    for (const v of ['bmad', 'openspec', 'graphify'])
       assert.ok(cfg.ids?.[v], `${id}: falta el id para ${v}`);
   }
 });

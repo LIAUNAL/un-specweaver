@@ -62,7 +62,6 @@
       "ids": {
         "bmad": "claude-code",
         "openspec": "claude",
-        "gentle": "claude-code",
         "graphify": "claude"
       },
       "graphifySkill": ".claude/skills/graphify",
@@ -76,7 +75,6 @@
       "ids": {
         "bmad": "opencode",
         "openspec": "opencode",
-        "gentle": "opencode",
         "graphify": "opencode"
       },
       "graphifySkill": ".opencode/skills/graphify",
@@ -84,7 +82,7 @@
       "commandStyle": "prefixed"
     }
   },
-  "_adapters": "Cada vendor nombra los mismos agentes distinto (BMAD: claude-code / OpenSpec: claude / Gentle: claude-code / graphify: claude). Este mapa es el unico lugar donde eso se sabe. Si un vendor renombra un id, se corrige aqui y nada mas.",
+  "_adapters": "Cada vendor nombra los mismos agentes distinto (BMAD: claude-code / OpenSpec: claude / graphify: claude). Este mapa es el unico lugar donde eso se sabe. Si un vendor renombra un id, se corrige aqui y nada mas.",
   "_commands": "Solo Claude Code y OpenCode exponen un formato de comandos documentado. Claude: .claude/commands/<ns>/<n>.md -> /ns:n. OpenCode: .opencode/commands/<ns>-<n>.md -> /ns-n. Los demas agentes reciben la skill, que igual funciona: es el mismo contenido sin atajo.",
   "surface": {
     "_comment": "Un solo vocabulario visible. Las skills de vendor se conservan enteras — son el valor y siguen siendo invocables. Lo que se poda son los COMANDOS que compiten con /sw:*: las fases del SDD (BMAD ya cubrio ese trabajo antes y mejor), los de OpenSpec (el flujo los llama por CLI) y los atajos bmad-* (los orquesta /sw:new). Podar el atajo no quita la skill.",

@@ -9,7 +9,9 @@ justifica.
 
 ## Instalar
 
-No hace falta instalar nada ni clonar este repositorio: `npx` descarga el paquete y lo corre.
+No hace falta instalar nada ni clonar este repositorio: **`npx` descarga el paquete, lo ejecuta y
+listo**. Por eso en los pasos veras `npx un-specweaver init` directamente y nunca un `npm install`
+previo — el `npx` de adelante ES la instalacion, y ademas te garantiza la ultima version.
 
 ```bash
 cd mi-proyecto
@@ -73,23 +75,46 @@ Duplicar entre capas es como empiezan a contradecirse.
 
 Once comandos, un solo vocabulario. En Claude Code se escriben `/sw:new`; en OpenCode, `/sw-new`.
 
-```
-                  ┌─ /sw:new ─────────────────────────────────┐
-   idea  ────────▶│  entender → decidir → descomponer         │
-                  │  → traducir → verificar                   │
-                  └───────────────────┬───────────────────────┘
-                                      │  contratos verificados
-                                      ▼
-   /sw:sprint ──▶ que se puede hacer en paralelo y que no
-                                      │
-                                      ▼
-   /sw:build <id> ──▶ construir una historia contra su contrato
-                                      │
-                                      ▼
-                    /sw:close la valida y archiva (linea base)
+**Dos puertas de entrada, un solo flujo despues.** Por donde entras depende de si ya hay codigo:
 
-   /sw:status ──▶ ¿como vamos? el dashboard, en cualquier momento
 ```
+  PROYECTO NUEVO                         PROYECTO QUE YA EXISTE
+  (no hay codigo)                        (hay codigo, y nadie lo especifico)
+
+  npx un-specweaver init                 npx un-specweaver init
+         │                                      │
+         │                               npx un-specweaver adopt --input <tus docs>
+         │                                 pregunta · recibe tu contexto · deja el brief
+         │                                      │
+         ▼                                      ▼
+  /sw:new                                /sw:adopt
+   entender → decidir → descomponer       leer el brief → ACORDAR EL ALCANCE
+   → traducir → verificar                 → mapear el codigo → arquitectura real vs declarada
+                                          → PRD brownfield del alcance → linea base
+         │                                      │
+         │        contratos verificados         │   (memoria de antes? npx un-specweaver memory import)
+         └──────────────────┬───────────────────┘
+                            ▼
+              ══════ DE AQUI EN ADELANTE, IGUAL ══════
+                            │
+   /sw:sprint ──▶ que se puede hacer en paralelo y que no
+                            ▼
+   /sw:build <id> ──▶ construir una historia contra su contrato
+                            ▼
+   /sw:close ──▶ la valida y archiva: eso es la LINEA BASE
+                            │
+                            ▼
+   lo que llega despues:  /sw:change "<req>"   requerimiento nuevo (control de alcance)
+                          /sw:bug "<defecto>"  defecto (sin control de alcance)
+                          /sw:ticket <n>       issue de GitHub: clasifica y enruta
+                            │
+   en cualquier momento:  /sw:status            ¿como vamos? el dashboard
+                          npx un-specweaver memory share    compartir el porque con el equipo
+```
+
+La diferencia entre las dos puertas no es el tamaño del proyecto, es **cuanto se especifica**:
+en uno nuevo, todo; en uno que ya existe, **solo el area donde vas a trabajar** — por eso
+`/sw:adopt` se detiene hasta acordarlo.
 
 | Comando | Cuando |
 |---|---|
@@ -123,6 +148,10 @@ Llena `docs/architecture-base.md` —`init` lo deja como plantilla— y abri tu 
 | 3 | `/sw:sprint` | que se puede trabajar en paralelo y que no |
 | 4 | `/sw:build <change-id>` | codigo contra el contrato, una story a la vez |
 | 5 | `/sw:close` | valida y archiva: eso pasa a ser la **linea base** |
+
+Las decisiones que se toman en el camino quedan en la memoria del proyecto
+(`.un-specweaver/engram`). Para que las vea el equipo: `npx un-specweaver memory share` y
+commiteas — [como funciona](#compartir-el-rationale-con-el-equipo).
 
 ### Proyecto con codigo ya empezado
 
@@ -434,7 +463,9 @@ npx un-specweaver status --open       # lo mismo como .un-specweaver/dashboard.h
 npx un-specweaver scan [dir]          # escanea un proyecto que ya existe y propone como adoptarlo
 npx un-specweaver adopt [--input X]   # prepara la adopcion: pregunta, recibe tus documentos y deja el brief
 npx un-specweaver validate            # valida todos los specs (envuelve a OpenSpec)
-npx un-specweaver memory              # estado de la memoria; `import` la trae, `share` la comparte
+npx un-specweaver memory              # donde vive la memoria y cuanta hay
+npx un-specweaver memory import       # traerla de la base global (proyecto de antes de 0.6)
+npx un-specweaver memory share        # exportarla al formato que git si versiona
 npx un-specweaver migrate             # muda un proyecto de 0.5.x al layout consolidado
 npx un-specweaver reset               # quita TODO lo que la herramienta creo
 npx un-specweaver vendors             # versiones pineadas
@@ -781,7 +812,7 @@ Todas verificadas contra los CLIs reales, no contra la documentacion.
   Code registra hooks `PreToolUse` que tambien disparan sobre `.md`: `init` los acota a codigo con
   un reemplazo exacto, y si una version futura cambia el texto, no los toca.
 - **Cada vendor nombra los agentes distinto** (BMAD `claude-code`, OpenSpec `claude`,
-  Gentle `claude-code`). El mapa en `src/vendors.json` es el unico lugar donde eso se sabe.
+  graphify `claude`). El mapa en `src/vendors.json` es el unico lugar donde eso se sabe.
 - **`uv` es un prerequisito real de BMAD** que su documentacion no destaca: el instalador lo
   verifica en su primera linea. No bloquea, pero callarlo seria mentir.
 - **Cada agente ubica y formatea los comandos distinto.** Claude Code:

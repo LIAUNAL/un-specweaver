@@ -66,7 +66,7 @@ The bridge knows it is regenerating, not creating:
 
 - if the change exists and is in progress, it **keeps the checked boxes** in `tasks.md` and tells
   you which were lost because the task text changed
-- if the requirement is **already archived** (lives in `openspec/specs/`), it emits
+- if the requirement is **already archived** (lives in `.un-specweaver/openspec/specs/`), it emits
   `## MODIFIED Requirements` in a new change `<id>-r2`, `-r3`… — the previous one stays in
   `archive/`. It reuses the archived scenario names because OpenSpec demands them; the content
   is updated
@@ -82,17 +82,20 @@ later waves, name which ones are impacted.
 ## Step 4 — Re-verify
 
 ```
-npx @fission-ai/openspec validate --all --strict
+npx un-specweaver validate
 ```
 
 ## Step 5 — Record the why
 
-Engram is **optional**, and its memory is **always scoped per project**: `.engram/config.json`
-pins the name it saves under and searches in. What you store here does not show up in other
-projects, and theirs does not show up here, unless you explicitly ask for a cross-project search
-(`all_projects`). Do not do that by default: another project's memory slipping in as if it were
-this one's is a hallucination with a citation. If `mem_current_project` does not return
-`project_source: "config"`, the binding is missing — run `npx un-specweaver init` before saving.
+Engram is **optional**, and its memory lives **inside the project**: `.un-specweaver/engram` is
+a database of its own, not a label over a shared one. What you store here does not exist for any
+other project, and deleting `.un-specweaver/` deletes it.
+
+**Known limit, and the only real failure mode:** if the user has the **global Engram plugin** in
+Claude Code, its tools live in another namespace (`mcp__plugin_engram_*`) and keep writing to
+`~/.engram`, outside the project. No project configuration overrides it. If you see two sets of
+memory tools, **use the project's and say so**; storing rationale in the wrong database is losing
+it without noticing. `npx un-specweaver doctor` reports it.
 
 - **If `engram` is on PATH** → store the decision and its reason there.
 - **If it is not** → write it anyway, in the change's `design.md` under `## Decisions`, and

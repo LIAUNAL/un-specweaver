@@ -17,13 +17,13 @@ function reportOptional(root, lang) {
   const line = (key, ok, detail) =>
     console.log(`  ${t(lang, ok ? 'ok' : 'warn')}  ${t(lang, `${key}.name`).padEnd(14)} ${detail}`);
 
-  // La memoria SIEMPRE se segmenta por proyecto. Sin el binding, engram autodetecta por
-  // git remote (funciona, verificado en 1.20), pero el nombre lo decide cada servidor
-  // y no queda escrito en el repo: se reporta como pendiente, no como roto.
+  // La memoria vive DENTRO del proyecto: borrar .un-specweaver la borra, y ningun otro
+  // proyecto la ve. Lo que no podemos vencer es el plugin global, asi que se dice.
   const e = detectEngram(root);
-  line('engram', e.available && !!e.project, e.available
-    ? `${t(lang, 'engram.present', e.bin)} — ${e.project ? t(lang, 'engram.scoped', e.project) : t(lang, 'engram.unbound')}`
+  line('engram', e.available && e.isolated, e.available
+    ? (e.isolated ? t(lang, 'engram.isolated', e.dir) : t(lang, 'engram.notIsolated'))
     : t(lang, 'engram.absent'));
+  if (e.globalPlugin) console.log(`  ${t(lang, 'warn')}  ${''.padEnd(14)} ${t(lang, 'engram.plugin')}`);
 
   return { engram: e };
 }
@@ -101,7 +101,7 @@ export async function init(opts) {
       vendors: {
         bmad: fs.existsSync(path.join(root, '_bmad')) ? `${VENDORS.bmad.npm}@${VENDORS.bmad.version}` : null,
         openspec: fs.existsSync(path.join(root, 'openspec')) ? `${VENDORS.openspec.npm}@${VENDORS.openspec.version}` : null,
-        gentle: which(VENDORS.gentle.bin) ? VENDORS.gentle.version : null,
+        engram: which(VENDORS.engram.bin) || null,
         graphify: which(VENDORS.graphify.bin) ? `${VENDORS.graphify.pip}@${VENDORS.graphify.version}` : null,
       },
       optional,
@@ -146,8 +146,8 @@ export function doctor(opts) {
 
   if (state) {
     console.log(t(lang, 'doctor.vendors'));
-    const now = { bmad: `${VENDORS.bmad.npm}@${VENDORS.bmad.version}`, openspec: `${VENDORS.openspec.npm}@${VENDORS.openspec.version}`, gentle: VENDORS.gentle.version, graphify: `${VENDORS.graphify.pip}@${VENDORS.graphify.version}` };
-    const present = { bmad: fs.existsSync(path.join(root, '_bmad')), openspec: fs.existsSync(path.join(root, 'openspec')), gentle: !!which(VENDORS.gentle.bin), graphify: !!which(VENDORS.graphify.bin) };
+    const now = { bmad: `${VENDORS.bmad.npm}@${VENDORS.bmad.version}`, openspec: `${VENDORS.openspec.npm}@${VENDORS.openspec.version}`, engram: VENDORS.engram.bin, graphify: `${VENDORS.graphify.pip}@${VENDORS.graphify.version}` };
+    const present = { bmad: fs.existsSync(path.join(root, '_bmad')), openspec: fs.existsSync(path.join(root, 'openspec')), engram: !!which(VENDORS.engram.bin), graphify: !!which(VENDORS.graphify.bin) };
     for (const [k, v] of Object.entries(now)) {
       const had = state.vendors?.[k];
       const mark = !present[k] ? t(lang, 'missing') : had === v ? t(lang, 'ok') : t(lang, 'drift');

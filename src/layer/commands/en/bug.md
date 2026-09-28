@@ -10,7 +10,7 @@ allowed-tools: Bash(npx:*), Bash(git:*), Bash(gh:*), Read, Write, Edit, Glob, Gr
 A defect and a new requirement are **different things and are handled differently**. The
 difference is not size or urgency:
 
-> **It is a defect** if the behavior specified in `openspec/specs/` is correct and the
+> **It is a defect** if the behavior specified in `.un-specweaver/openspec/specs/` is correct and the
 > implementation does not meet it. **It is a requirement** if the spec does not cover the case.
 
 A defect **does not go through scope control**: what was agreed does not change, it just was not
@@ -20,7 +20,7 @@ The defect comes in `$ARGUMENTS`. If empty, ask for it.
 
 ## Step 1 — Find the violated requirement
 
-Search `openspec/specs/` for the `### Requirement:` the implementation fails, and the specific
+Search `.un-specweaver/openspec/specs/` for the `### Requirement:` the implementation fails, and the specific
 `#### Scenario:` that breaks.
 
 **If you cannot find it, stop.** It means one of two things, and you must decide which:
@@ -55,9 +55,9 @@ requirement: switch to `/sw:change`, because what was agreed needs sharpening.
 ## Step 4 — Close out
 
 1. The failing test passes; the others still pass
-2. `npx @fission-ai/openspec validate --all --strict`
+2. `npx un-specweaver validate`
 3. Record the root cause where it belongs (see "Memory" in `/sw:build`)
-4. `openspec archive <change-id>`
+4. `npx un-specweaver close <change-id>`
 
 If the defect came from a GitHub issue, comment the change-id there and close it.
 

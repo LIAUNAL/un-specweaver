@@ -7,13 +7,14 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { VENDORS } from './env.mjs';
 import { readChanges } from './status/collect.mjs';
+import { paths } from './paths.mjs';
 import fs from 'node:fs';
 
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
 
 // Changes activos con todas las tareas marcadas: los candidatos a cerrar.
 export function closable(root) {
-  const trace = readJson(path.join(root, '.un-specweaver', 'trace.json'));
+  const trace = readJson(paths(root).trace);
   return readChanges(root, trace).filter((c) => c.state === 'done');
 }
 
@@ -21,9 +22,11 @@ export function unarchivedDone(root) {
   return closable(root).length;
 }
 
+// OpenSpec no busca hacia arriba: sus comandos corren con cwd = el padre de openspec/, que
+// ahora es .un-specweaver. El flujo nunca los invoca a mano; los envuelve este CLI.
 const defaultRun = (root) => (args) => {
   const r = spawnSync('npx', ['--yes', `${VENDORS.openspec.npm}@${VENDORS.openspec.version}`, ...args], {
-    cwd: root, encoding: 'utf8', env: { ...process.env, OPENSPEC_TELEMETRY: '0' },
+    cwd: paths(root).openspecCwd, encoding: 'utf8', env: { ...process.env, OPENSPEC_TELEMETRY: '0' },
   });
   return { status: r.status ?? 1, out: `${r.stdout || ''}${r.stderr || ''}` };
 };

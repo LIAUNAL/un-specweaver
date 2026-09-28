@@ -16,16 +16,16 @@ is not an error.
 
 ## Step 0 — Verify the build environment is complete
 
-`npx un-specweaver doctor`. Here the Gentle-AI steps (`gentle-bin`, `gentle-config`) **do**
-block: they are the SDD that does the building. If they read missing, fix them with
-`npx un-specweaver init` before continuing.
+`npx un-specweaver doctor`. Here the memory and code-map steps (`engram-bin`, `engram-project`,
+`graphify-bin`, `graphify`) DO block: without them you build with no rationale and explore
+blind. If any is missing, fix it with `npx un-specweaver init`.
 
 ## Step 1 — Verify you can start
 
 Before writing anything:
 
 1. Find the change in `.un-specweaver/sprint-plan.md`. If it declares `depende de` / depends on,
-   verify **each** dependency is archived (`openspec/changes/archive/`) or has a complete `tasks.md`.
+   verify **each** dependency is archived (`.un-specweaver/openspec/changes/archive/`) or has a complete `tasks.md`.
 2. If a dependency is not ready, **stop and say so**. Building on a spec that can still change is
    work that will be thrown away.
 3. Read the whole change: `proposal.md`, `specs/**/spec.md`, `tasks.md`.
@@ -94,25 +94,24 @@ that must have a test exercising it. `tasks.md` is the checklist.
    migration, something cross-cutting — write `design.md` in the change folder before coding.
    **Only if it applies**: OpenSpec asks for it conditionally, not by default.
 
-### Gentle-AI skills that help here
+### If the user already has Gentle-AI
 
-Invoke them by asking in plain language, no ceremony:
+This tool **does not install or configure it** — that would touch their global configuration and
+clash with their own install. But if `gentle-ai` is on this machine's PATH, its review skills
+exist and are worth offering when closing (never imposing): `work-unit-commits`, `judgment-day`,
+`branch-pr` / `chained-pr`, and the `review-readability` / `review-reliability` /
+`review-resilience` / `review-risk` subagents.
 
-- **`work-unit-commits`** — group changes into reviewable commits instead of one blob
-- **`judgment-day`** — adversarial review with two judges that contradict each other
-- the **`review-readability`**, **`review-reliability`**, **`review-resilience`**,
-  **`review-risk`** subagents — each looks through a different lens
-- **`branch-pr`** / **`chained-pr`** — PRs with issue-first checks; splits anything over 400 lines
-
-Offer them at close; do not impose them.
+**Check before naming them.** Suggesting a skill that does not exist is the same silent failure
+as invoking graphify and having nothing happen.
 
 ## Step 4 — Close out
 
 1. Tick the `tasks.md` boxes that are genuinely done
-2. `npx @fission-ai/openspec validate --all --strict`
+2. `npx un-specweaver validate`
 3. Record the implementation decisions that are not obvious from the code (see "Memory" below)
 4. **Close the story**: `npx un-specweaver close <change-id>`. It validates and archives; the
-   delta moves into `openspec/specs/` and becomes the baseline. **Not optional, not "when
+   delta moves into `.un-specweaver/openspec/specs/` and becomes the baseline. **Not optional, not "when
    delivered"**: a finished story left unclosed leaves `/sw:change` with nothing to measure
    against. If you decide not to close (the story awaits review, say), say so explicitly and
    why; `doctor` keeps flagging it until it is closed
@@ -123,12 +122,15 @@ Offer them at close; do not impose them.
 
 ## Decision memory (Engram)
 
-Engram is **optional**, and its memory is **always scoped per project**: `.engram/config.json`
-pins the name it saves under and searches in. What you store here does not show up in other
-projects, and theirs does not show up here, unless you explicitly ask for a cross-project search
-(`all_projects`). Do not do that by default: another project's memory slipping in as if it were
-this one's is a hallucination with a citation. If `mem_current_project` does not return
-`project_source: "config"`, the binding is missing — run `npx un-specweaver init` before saving.
+Engram is **optional**, and its memory lives **inside the project**: `.un-specweaver/engram` is
+a database of its own, not a label over a shared one. What you store here does not exist for any
+other project, and deleting `.un-specweaver/` deletes it.
+
+**Known limit, and the only real failure mode:** if the user has the **global Engram plugin** in
+Claude Code, its tools live in another namespace (`mcp__plugin_engram_*`) and keep writing to
+`~/.engram`, outside the project. No project configuration overrides it. If you see two sets of
+memory tools, **use the project's and say so**; storing rationale in the wrong database is losing
+it without noticing. `npx un-specweaver doctor` reports it.
 
 - **If `engram` is on PATH** → store the decision and its reason there.
 - **If it is not** → write it anyway, in the change's `design.md` under `## Decisions`, and

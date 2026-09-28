@@ -8,7 +8,7 @@ allowed-tools: Bash(npx:*), Bash(git:*), Read, Glob, Grep
 # /sw:close — close finished stories
 
 Building is not closing. A story is **finished** when its tasks are done; it is **closed** when
-its spec has been archived and moved into `openspec/specs/`: the baseline `/sw:change` measures
+its spec has been archived and moved into `.un-specweaver/openspec/specs/`: the baseline `/sw:change` measures
 everything that comes later against. Real case: 22 stories finished, zero closed, and
 `/sw:change` with nothing to compare to.
 
@@ -43,4 +43,4 @@ The `validate` error points at the spec, but the spec is derived: **the problem 
 ## Step 4 — Confirm
 
 `npx un-specweaver status`: the "specs archived" tile should no longer be amber. If you commit,
-`openspec/specs/` and `openspec/changes/archive/` go to the repo: they are the product.
+`.un-specweaver/openspec/specs/` and `.un-specweaver/openspec/changes/archive/` go to the repo: they are the product.

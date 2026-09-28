@@ -42,13 +42,12 @@ conversacion; saltarselo de menos mete comportamiento nuevo sin que nadie lo apr
 ## Regla de frontera
 
 BMAD **termina en la story**. De ahi en adelante el contrato es el spec de OpenSpec, y la
-construccion se hace contra el. Las fases del SDD de Gentle-AI no se usan: rehacen el trabajo
-que BMAD ya hizo antes y con mas profundidad (epicas, historias, criterios, cobertura de FR).
+construccion se hace contra el, directo: no hay fases intermedias que orquestar.
 
-Lo que **si** se usa de Gentle-AI son sus skills, que no tienen ceremonia: `judgment-day`
-(revision adversarial), `work-unit-commits`, `branch-pr`, `chained-pr`, y los subagentes
-`review-readability` / `review-reliability` / `review-resilience` / `review-risk`.
-Se invocan pidiendolos en lenguaje normal.
+Gentle-AI **no se instala** en este montaje: tocaria la configuracion global del usuario y
+chocaria con su propia instalacion. Si aun asi esta en el PATH, sus skills de revision
+(`judgment-day`, `work-unit-commits`, `branch-pr`) se pueden ofrecer al cerrar — pero
+compruébalo antes de nombrarlas.
 `bmad-agent-dev`, `bmad-build`, `bmad-build-auto` y `bmad-spec` estan podados en esta
 instalacion a proposito. Si no los encuentras, no es un error: no busques agentes
 desarrolladores de BMAD ni uses `bmad-spec` en lugar de OpenSpec.
@@ -59,8 +58,8 @@ Antes de buscar algo, sabe donde vive. No dupliques entre capas.
 
 | Dato | Donde vive | No lo busques en |
 |---|---|---|
-| Intencion de producto (el *que* de negocio) | `_bmad-output/` (PRD, epics) | los specs |
-| Contrato de comportamiento (el *que* tecnico) | `openspec/specs/` | el PRD |
+| Intencion de producto (el *que* de negocio) | `.un-specweaver/bmad/` (PRD, epics) | los specs |
+| Contrato de comportamiento (el *que* tecnico) | `.un-specweaver/openspec/specs/` | el PRD |
 | Decisiones y rationale (el *por que*) | Engram **si existe**, si no `design.md` | los docs |
 | Historia de un requisito (que cambio y por que) | `.memlog.md` de BMAD + `sprint-change-proposal-*.md` + `changelog.jsonl`, via `un-specweaver history <FR>` | la memoria del agente |
 | Estructura del codigo (el *donde*) | grafo de graphify **si existe** | leyendo archivos a ciegas |
@@ -72,7 +71,7 @@ cualquier default que asumirias.
 
 ## Reglas que aplican a todo el flujo
 
-1. **Los specs son derivados.** Se regeneran desde `_bmad-output/epics.md` con
+1. **Los specs son derivados.** Se regeneran desde `.un-specweaver/bmad/planning-artifacts/epics.md` con
    `npx un-specweaver bridge`, no se editan a mano. Si un spec esta mal, el epics.md esta mal.
 2. **El alcance se controla antes de tocar archivos**, no despues. Ver `/sw:change`.
 3. **Un desarrollador, un change a la vez.** Las stories estan dimensionadas para eso.
@@ -105,14 +104,15 @@ reconstruye en cada commit. Es el unico testigo de la estructura **real** del co
 
 ## Capacidades opcionales
 
-**Engram** lo instala Gentle-AI, pero puede quedar bloqueado por la confianza de Homebrew.
-Si `engram` no esta en PATH, escribe el rationale en `design.md` del change bajo `## Decisions`
-y dilo. Nunca lo pierdas en silencio.
+**Engram** lo instala `init` (via Homebrew o `go install`). Si `engram` no esta en PATH,
+escribe el rationale en `design.md` del change bajo `## Decisions` y dilo. Nunca lo pierdas
+en silencio.
 
-La memoria de Engram **siempre esta segmentada por proyecto**: `.engram/config.json` fija el
-nombre, y todos los servidores MCP de Engram lo respetan. No busques con `all_projects` ni con
-un `project` ajeno salvo que el usuario lo pida: una memoria de otro proyecto leida como si
-fuera de este es la forma mas facil de alucinar con fuente.
+La memoria vive **dentro del proyecto**, en `.un-specweaver/engram`: no es una etiqueta sobre
+una base compartida, es una base propia. Borrar la carpeta borra la memoria, y ningun otro
+proyecto la ve. Limite conocido: si el usuario tiene el **plugin global de Engram** en Claude
+Code, sus herramientas viven en otro namespace y siguen escribiendo en `~/.engram`. Si ves dos
+juegos de herramientas de memoria, usa las del proyecto y dilo; `doctor` lo reporta.
 
 **uv** (Python) lo usa BMAD para resolver su configuracion, y es una de las dos vias (con pipx)
 por las que `init` instala graphify. Si BMAD no lo encuentra, sus skills traen fallback manual.

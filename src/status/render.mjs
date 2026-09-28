@@ -29,7 +29,7 @@ const L = {
     noTrace: 'No trace.json yet: run the bridge (/sw:new phase 2).', noSprint: 'No epics.md: no waves to compute.',
     noDecisions: 'No memlogs yet: BMAD writes them while conversing.', generated: 'generated', entries: 'entries', sources: 'sources',
     graphNodes: 'nodes', graphEdges: 'edges', openGraph: 'open graph.html', noGraph: 'no graph (graphify update .)',
-    engramOn: 'Engram bound to', engramOff: 'Engram not bound (init)', engramAbsent: 'Engram not installed',
+    engramOn: 'project memory at', engramOff: 'not isolated (run init)', engramAbsent: 'Engram not installed', engramGlobal: 'heads up: the global plugin also writes to ~/.engram',
     total: 'total', archived: 'archived', inProgress: 'in progress', hint: 'Regenerate: npx un-specweaver status --html',
     delta: { ADDED: 'new', MODIFIED: 'modified' }, summary: 'Summary', of: 'of',
   },
@@ -79,7 +79,7 @@ export function renderTerminal(s, lang = 'es') {
   o.push(`\n${t.decisions}  ${s.decisions.total} ${t.entries}, ${s.decisions.sources} ${t.sources}${s.decisions.total ? '  ' + Object.entries(s.decisions.byType).map(([k, v]) => `${k} ${v}`).join(' · ') : `  ${t.noDecisions}`}`);
 
   o.push(`\n${t.map}  ${s.graph.path ? `${s.graph.nodes} ${t.graphNodes}, ${s.graph.edges} ${t.graphEdges}${s.graph.html ? ` · ${s.graph.html}` : ''}` : t.noGraph}`);
-  o.push(`${t.memory}  ${s.engram.available ? (s.engram.project ? `${t.engramOn} "${s.engram.project}"` : t.engramOff) : t.engramAbsent}`);
+  o.push(`${t.memory}  ${s.engram.available ? (s.engram.isolated ? `${t.engramOn} ${s.engram.dir}` : t.engramOff) : t.engramAbsent}${s.engram.globalPlugin ? ` · ${t.engramGlobal}` : ''}`);
   o.push(`\n${t.hint}\n`);
   return o.join('\n');
 }
@@ -304,7 +304,7 @@ const reqChanges = (id) => reqByKey.get(key(id))?.changes ?? (M.decisions.rankin
 
 // ---- header ----------------------------------------------------------------
 function header(){
-  const eng = M.engram.available ? (M.engram.project ? \`<span class="pill"><i class="dot"></i>\${T.engram} <b>\${esc(M.engram.project)}</b></span>\` : \`<span class="pill"><i class="dot warn"></i>\${T.engram} <b>\${T.unbound}</b></span>\`) : \`<span class="pill"><i class="dot off"></i>\${T.engram} <b>\${T.absent}</b></span>\`;
+  const eng = M.engram.available ? (M.engram.isolated ? \`<span class="pill"><i class="dot"></i>\${T.engram} <b>\${esc(M.engram.dir)}</b></span>\` : \`<span class="pill"><i class="dot warn"></i>\${T.engram} <b>\${T.unbound}</b></span>\`) : \`<span class="pill"><i class="dot off"></i>\${T.engram} <b>\${T.absent}</b></span>\`;
   const gr = M.graph.path ? \`<span class="pill"><i class="dot"></i>\${T.map} <b>\${M.graph.nodes} \${T.nodes}</b>\${M.graph.html?\` · <a href="../\${esc(M.graph.html)}">graph.html</a>\`:''}</span>\` : \`<span class="pill"><i class="dot off"></i>\${T.map}</span>\`;
   return \`<div class="top"><div class="logo"><i></i>un-specweaver</div><span class="pill"><b>\${esc(M.project.name)}</b></span><span class="sp"></span>
     \${M.project.agents.length?\`<span class="pill">\${esc(M.project.agents.join(', '))}</span>\`:''}\${eng}\${gr}<span class="pill mono">\${esc(M.generatedAt.slice(0,16).replace('T',' '))}</span></div>\`;

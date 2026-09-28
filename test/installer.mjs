@@ -6,7 +6,9 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { VENDORS, which, gte, vendorIds, preflight, detectAgents, detectGraphify, detectEngram, brewTrusted, brewTapKinds, untrustedItems } from '../src/env.mjs';
 import { runAction, runPlan } from '../src/run.mjs';
-import { engramProject, engramBinding, legacyEngramMcp, gitRemoteName, ENGRAM_CONFIG, writeState, readState } from '../src/env.mjs';
+import { globalEngramPlugin, writeState, readState } from '../src/env.mjs';
+import { paths, HOME } from '../src/paths.mjs';
+import { ENGRAM_WRAPPER, mcpConfigFor, engramIsolation } from '../src/steps.mjs';
 import { t, keysOf } from '../src/i18n.mjs';
 import { resolvePrefs, parseAnswer, parseAgents, DEFAULTS, CHOICES, validateFlag } from '../src/prefs.mjs';
 import { buildPlan, STEPS, renderAction, renderCommand, commandPath, NAMESPACE, gitignoreBlock, GITIGNORE_START, graphifyIgnoreBlock, scopeGraphifyHooks } from '../src/steps.mjs';
@@ -55,11 +57,11 @@ test('el plan de un proyecto vacio incluye todos los pasos en orden', () => {
   const plan = buildPlan(ctxFor(root));
   // gitignore va primero: si un paso posterior falla, el vendor a medio instalar
   // no puede terminar commiteado por accidente.
-  assert.deepEqual(plan.map((s) => s.id), ['gitignore', 'bmad', 'bmad-prune', 'openspec', 'gentle-bin', 'gentle-config', 'engram-scope', 'graphify-bin', 'graphify', 'dashboard-hook', 'surface', 'layer']);
+  assert.deepEqual(plan.map((s) => s.id), ['gitignore', 'bmad', 'bmad-prune', 'openspec', 'engram-bin', 'engram-project', 'graphify-bin', 'graphify', 'dashboard-hook', 'surface', 'layer']);
   // gitignore depende de si hay repo git; gentle-bin depende del PATH de la maquina,
   // no del proyecto. El resto si tiene que estar pendiente en un directorio vacio.
   // graphify-bin tambien depende del PATH.
-  const projectScoped = plan.filter((s) => !['gitignore', 'gentle-bin', 'engram-scope', 'graphify-bin', 'dashboard-hook'].includes(s.id));
+  const projectScoped = plan.filter((s) => !['gitignore', 'engram-bin', 'graphify-bin', 'dashboard-hook'].includes(s.id));
   assert.ok(projectScoped.every((s) => s.status.state === 'pending'), 'nada del proyecto puede estar "ok" en un directorio vacio');
   fs.rmSync(root, { recursive: true, force: true });
 });
@@ -67,25 +69,13 @@ test('el plan de un proyecto vacio incluye todos los pasos en orden', () => {
 test('cada paso declara que bloquea: sin eso, un pendiente se lee como bloqueo total', () => {
   const root = tmp();
   const blocks = Object.fromEntries(buildPlan(ctxFor(root)).map((s) => [s.id, s.blocks]));
-  // Gentle-AI es el SDD que construye. No puede bloquear levantar requerimientos.
-  assert.equal(blocks['gentle-bin'], 'build');
-  assert.equal(blocks['gentle-config'], 'build');
+  // La memoria y el mapa del codigo sirven para construir. No pueden bloquear levantar
+  // requerimientos: eso es lo que hacia que un agente se detuviera antes de siquiera planear.
+  for (const id of ['engram-bin', 'engram-project', 'graphify-bin', 'graphify']) assert.equal(blocks[id], 'build', id);
   for (const id of ['bmad', 'bmad-prune', 'openspec', 'layer']) assert.equal(blocks[id], 'plan', id);
   assert.equal(blocks['gitignore'], 'none', 'un .gitignore ausente no impide trabajar');
   assert.ok(Object.values(blocks).every((b) => ['plan', 'build', 'none'].includes(b)), 'blocks invalido');
   fs.rmSync(root, { recursive: true, force: true });
-});
-
-test('los comandos no tratan a Gentle-AI como bloqueo para planear', () => {
-  for (const lang of ['es', 'en']) {
-    const nuevo = fs.readFileSync(path.join(LAYER, 'commands', lang, 'new.md'), 'utf8');
-    assert.match(nuevo, /sw:build/, `${lang}/new: debe nombrar que paso si bloquea /sw:build`);
-    assert.doesNotMatch(nuevo, lang === 'es' ? /Si hay pasos en "falta", detente/ : /If any step reads .*missing, stop/,
-      `${lang}/new: la precondicion vieja bloqueaba la planeacion por Gentle-AI`);
-    // /sw:build si debe exigirlo: ahi Gentle-AI es el que construye.
-    const build = fs.readFileSync(path.join(LAYER, 'commands', lang, 'build.md'), 'utf8');
-    assert.match(build, /gentle-config/, `${lang}/build: debe verificar el entorno de construccion`);
-  }
 });
 
 test('BMAD se instala pineado, con alcance del proyecto y sin flags inexistentes', () => {
@@ -130,7 +120,9 @@ test('un paso dependiente nunca se reporta "ok" si su dependencia sigue pendient
   const plan = buildPlan(ctxFor(root));
   // sin BMAD instalado no hay nada en disco que podar, pero el paso corre despues
   assert.equal(plan.find((s) => s.id === 'bmad-prune').status.state, 'pending');
-  assert.equal(plan.find((s) => s.id === 'gentle-config').status.state, 'pending');
+  // surface poda comandos que instala BMAD: sin BMAD todavia no hay nada en disco, pero
+  // reportarse "ok" haria que el dry-run mintiera sobre lo que va a pasar.
+  assert.equal(plan.find((s) => s.id === 'surface').status.state, 'pending');
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -144,16 +136,6 @@ test('la instalacion es de alcance del proyecto: ninguna ruta del plan sale de r
       if (a.kind === 'write' || a.kind === 'rm')
         assert.ok(!path.resolve(a.file || a.target).startsWith(path.join(home, '.claude')), 'toca el HOME del usuario');
     }
-  fs.rmSync(root, { recursive: true, force: true });
-});
-
-test('el instalador remoto de Gentle-AI exige consentimiento explicito', () => {
-  const root = tmp();
-  // sin brew el plan cae al script remoto; debe venir marcado consent
-  const step = STEPS.find((s) => s.id === 'gentle-bin');
-  const actions = step.plan({ ...ctxFor(root), platform: 'linux' });
-  const remote = actions.find((a) => a.kind === 'shell');
-  if (remote) assert.equal(remote.consent, true, 'curl|bash sin marca de consentimiento');
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -642,19 +624,12 @@ test('untrustedItems no inventa nada cuando el tap no aplica', () => {
   if (Array.isArray(r)) assert.deepEqual(r, [], 'un tap inexistente no publica nada que autorizar');
 });
 
-test('vendors declara todo lo que el pipeline de Gentle-AI instala del tap', () => {
-  // Descubierto de a uno en una corrida real: gentle-ai -> engram -> gga.
-  // Declararlos juntos evita que el usuario autorice de a uno por ronda de error.
-  assert.deepEqual(VENDORS.gentle.brewFormulae, ['gentle-ai', 'engram', 'gga']);
-});
-
 test('el remedio del tap nombra el comando exacto en los dos idiomas', () => {
   for (const lang of ['es', 'en']) {
-    const fix = t(lang, 'step.gentle.untrustedFix', '       brew trust --cask foo/tap/engram', 'foo/tap');
-    // Ofrece las dos rutas: minimo privilegio primero, tap entero como alternativa
-    // declarada. Tres rondas de whack-a-mole tambien es un problema de usabilidad.
+    const fix = t(lang, 'step.engram-bin.untrustedFix', '       brew trust --cask foo/tap/engram');
+    // Solo UN item que autorizar: antes eran tres (gentle-ai, engram, gga) y cada uno
+    // aparecia en su propia ronda de whack-a-mole.
     assert.match(fix, /brew trust --cask foo\/tap\/engram/);
-    assert.match(fix, /brew trust foo\/tap/, 'debe ofrecer la alternativa del tap completo');
     assert.match(fix, /un-specweaver init/);
   }
 });
@@ -674,64 +649,11 @@ test('Engram se trata como capacidad opcional, no se asume', () => {
   }
 });
 
-test('detectEngram no explota y reporta el proyecto atado', () => {
-  const root = tmp();
-  let e = detectEngram(root);
-  assert.equal(e.project, null);
-  assert.equal(e.legacyMcp, false);
-  assert.equal(typeof e.available, 'boolean');
-  fs.mkdirSync(path.join(root, '.engram'), { recursive: true });
-  fs.writeFileSync(path.join(root, ENGRAM_CONFIG), JSON.stringify({ project_name: 'Demo' }));
-  e = detectEngram(root);
-  assert.equal(e.project, 'demo', 'engram normaliza a minusculas; se reporta igual');
-  fs.rmSync(root, { recursive: true, force: true });
-});
-
 test('un dry-run con un paso bloqueado no puede reportar exito', async () => {
   const root = tmp();
   const plan = [{ id: 'x', title: 'X', status: {}, actions: [{ kind: 'blocked', title: 't', why: 'w', fix: 'f' }] }];
   const [r] = await runPlan(plan, { root, lang: 'es', dryRun: true });
   assert.equal(r.ok, false, 'dry-run debe propagar el bloqueo, no decir "Listo"');
-  fs.rmSync(root, { recursive: true, force: true });
-});
-
-test('gentle-config anuncia que escribe fuera del proyecto antes de correr', () => {
-  const root = tmp();
-  const step = STEPS.find((s) => s.id === 'gentle-config');
-  const actions = step.plan(ctxFor(root));
-  const exec = actions.find((a) => a.kind === 'exec');
-  if (exec) {
-    // Es el unico paso que toca el HOME. El aviso va ANTES del exec, no despues
-    // de que el usuario lo descubra por su cuenta.
-    const aviso = actions.find((a) => a.kind === 'note' && /engram/i.test(a.text));
-    assert.ok(aviso, 'falta el aviso de escritura fuera del proyecto');
-    assert.ok(actions.indexOf(aviso) < actions.indexOf(exec), 'el aviso debe preceder al comando');
-    assert.match(aviso.text, /~\/\.claude\/mcp/, 'debe nombrar las rutas concretas');
-  }
-  fs.rmSync(root, { recursive: true, force: true });
-});
-
-test('un agente que falla no impide configurar los demas', async () => {
-  const root = tmp();
-  // Caso real: Codex 0.133 no cumplia el minimo de Engram y tumbaba tambien a Claude Code,
-  // que no tenia nada malo. Se configura uno por comando, tolerando fallos individuales.
-  const step = STEPS.find((s) => s.id === 'gentle-config');
-  const execs = step.plan(ctxFor(root, ['claude-code', 'opencode'])).filter((a) => a.kind === 'exec');
-  if (execs.length) {
-    assert.equal(execs.length, 2, 'un comando por agente, no uno con todos');
-    assert.ok(execs.every((e) => e.tolerateFailure), 'cada uno debe tolerar el fallo de los otros');
-    assert.deepEqual(execs.map((e) => e.args[e.args.indexOf('--agents') + 1]), ['claude-code', 'opencode']);
-  }
-
-  let corridas = 0;
-  const plan = [{ id: 'x', title: 'X', status: {}, actions: [
-    { kind: 'exec', cmd: 'node', args: ['-e', 'process.exit(1)'], tolerateFailure: true },
-    { kind: 'exec', cmd: 'node', args: ['-e', 'process.exit(0)'], tolerateFailure: true },
-  ] }];
-  const orig = console.error; console.error = () => {};
-  const [r] = await runPlan(plan, { root, lang: 'es' });
-  console.error = orig;
-  assert.equal(r.ok, false, 'el paso reporta el fallo');
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -757,24 +679,6 @@ test('el bloque de gitignore no depende de los agentes de esa corrida', () => {
   for (const d of ['.claude/skills', '.agents/skills', '.opencode/commands'])
     assert.ok(uno.includes(d), `falta cubrir ${d}`);
 });
-
-test('el bloque cubre tambien lo que instala Gentle-AI', () => {
-  const b = gitignoreBlock([]);
-  for (const line of ['.claude/skills/sdd-*/', '.claude/skills/work-unit-commits/',
-                      '.claude/commands/sdd-*.md', '.claude/skills/_shared/'])
-    assert.ok(b.includes(line), `falta: ${line}`);
-});
-
-test('ignora la config generada por Gentle-AI pero no la que edita un humano', () => {
-  const b = gitignoreBlock([]);
-  for (const g of ['.claude/mcp/', '.claude/output-styles/', '.claude/agents/sdd-*.md'])
-    assert.ok(b.includes(g), `deberia ignorar ${g}`);
-  // Perder las reglas propias del usuario en silencio es peor que el ruido en git.
-  for (const keep of ['CLAUDE.md', 'settings.json'])
-    assert.ok(!new RegExp(`^\\\\S*${keep}$`, 'm').test(b), `${keep} lo edita un humano: no se ignora`);
-});
-
-
 
 test('/sw:build carga los artefactos de planeacion de BMAD', () => {
   // Hueco real: el spine de arquitectura y el diseño UX existian y el comando no los
@@ -812,16 +716,6 @@ test('/sw:build construye directo contra el spec, sin orquestar el SDD', () => {
   }
 });
 
-test('/sw:build ofrece las skills de Gentle-AI que si sirven sin ceremonia', () => {
-  // No se descarta Gentle-AI: se descarta la orquestacion. Las skills quedan.
-  for (const lang of ['es', 'en']) {
-    const src = fs.readFileSync(path.join(LAYER, 'commands', lang, 'build.md'), 'utf8');
-    for (const skill of ['work-unit-commits', 'judgment-day', 'review-risk', 'branch-pr'])
-      assert.ok(src.includes(skill), `${lang}: falta ofrecer ${skill}`);
-    assert.match(src, lang === 'es' ? /no las impongas/ : /do not impose/, `${lang}: son opcionales`);
-  }
-});
-
 test('design.md se escribe solo cuando aplica, no por defecto', () => {
   // La duplicacion que confundia: bmad-ux produce el diseño de producto UNA vez;
   // design.md es tecnico, por change, y OpenSpec lo pide condicional.
@@ -839,10 +733,11 @@ test('la poda de superficie quita comandos pero conserva las skills', () => {
   for (const keep of ['bmad-prd', 'bmad-create-epics-and-stories', 'bmad-ux'])
     assert.ok(!VENDORS.bmad.prune.includes(keep), `${keep} es planeacion: la skill se queda`);
   assert.deepEqual(VENDORS.surface.pruneCommandDirs, ['opsx']);
-  // Ninguna skill de Gentle-AI puede aparecer en una lista de poda: son el valor que se queda.
+  // Lo que el usuario instale por su cuenta no se poda: solo se podan los comandos que
+  // compiten con /sw:*, y solo de lo que instala este montaje.
   const podadas = [...VENDORS.bmad.prune, ...VENDORS.surface.pruneCommandPrefixes];
-  for (const skill of VENDORS.gentle.skills)
-    assert.ok(!podadas.includes(skill), `${skill} es valor de Gentle-AI, no se poda`);
+  for (const skill of [...VENDORS.gentle.reviewSkills, ...VENDORS.gentle.reviewAgents])
+    assert.ok(!podadas.includes(skill), `${skill} no es nuestro: no se poda`);
 });
 
 test('bug y change son flujos distintos, no variantes del mismo', () => {
@@ -923,75 +818,6 @@ test('las rutas de poda caen dentro del proyecto, tambien con agentes detectados
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('la memoria de Engram se segmenta por proyecto con .engram/config.json', () => {
-  // VERIFICADO contra engram 1.20: .engram/config.json es el caso 0 de su deteccion de
-  // proyecto y lo honran todos sus servidores MCP (plugin de Claude Code, global de Gentle-AI,
-  // OpenCode, CLI). Registrar un segundo servidor con --project en .mcp.json duplicaba las
-  // herramientas de memoria en Claude Code y OpenCode ni lo leia.
-  const root = tmp();
-  const step = STEPS.find((s) => s.id === 'engram-scope');
-  assert.equal(step.status(ctxFor(root)).state, 'pending', 'siempre se ata, haya o no binario');
-
-  const actions = step.plan(ctxFor(root));
-  assert.equal(actions.length, 1, 'sin legado, una sola escritura');
-  const [action] = actions;
-  assert.equal(action.kind, 'write');
-  assert.ok(action.file.endsWith(path.join('.engram', 'config.json')));
-  assert.deepEqual(JSON.parse(action.content), { project_name: engramProject(root) });
-
-  fs.mkdirSync(path.dirname(action.file), { recursive: true });
-  fs.writeFileSync(action.file, action.content);
-  assert.equal(step.status(ctxFor(root)).state, 'ok', 'despues de escribirlo, esta al dia');
-  assert.equal(engramBinding(root), engramProject(root));
-  fs.rmSync(root, { recursive: true, force: true });
-});
-
-test('el servidor engram --project de la version anterior se retira sin tocar los demas', () => {
-  const root = tmp();
-  const step = STEPS.find((s) => s.id === 'engram-scope');
-  fs.writeFileSync(path.join(root, '.mcp.json'), JSON.stringify({ mcpServers: {
-    context7: { command: 'npx', args: ['-y', 'ctx7'] },
-    engram: { command: 'engram', args: ['mcp', '--tools=agent', '--project', 'viejo'] },
-  } }));
-  assert.equal(legacyEngramMcp(root), 'viejo');
-  assert.match(step.status(ctxFor(root)).detail, /migrar/);
-
-  const actions = step.plan(ctxFor(root));
-  const mcp = actions.find((a) => a.kind === 'write' && a.file.endsWith('.mcp.json'));
-  assert.ok(mcp, 'debe reescribir .mcp.json');
-  const j = JSON.parse(mcp.content);
-  assert.ok(j.mcpServers.context7, 'no puede borrar servidores que ya estaban');
-  assert.equal(j.mcpServers.engram, undefined, 'y debe quitar solo el suyo');
-  assert.ok(actions.some((a) => a.kind === 'note' && /plugin/i.test(a.text)), 'explica por que se retira');
-
-  // Un .mcp.json con engram SIN --project no es nuestro (lo pudo escribir Gentle-AI): no se toca.
-  fs.writeFileSync(path.join(root, '.mcp.json'), JSON.stringify({ mcpServers: {
-    engram: { command: 'engram', args: ['mcp', '--tools=agent'] },
-  } }));
-  assert.equal(legacyEngramMcp(root), null);
-  assert.ok(!step.plan(ctxFor(root)).some((a) => a.kind === 'write' && a.file.endsWith('.mcp.json')));
-  fs.rmSync(root, { recursive: true, force: true });
-});
-
-test('el nombre de proyecto de Engram coincide con el que engram autodetecta', () => {
-  // Sin repo, carpeta en forma segura.
-  assert.equal(engramProject('/a/b/LandingPageJSMR'), 'landingpagejsmr');
-  assert.equal(engramProject('/a/b/un-specweaver-web'), 'un-specweaver-web');
-  assert.equal(engramProject('/a/b/Mi Proyecto 2026'), 'mi-proyecto-2026');
-
-  // Con remote, el nombre del repo tal como lo deriva engram (extractRepoName + lowercase):
-  // asi las memorias guardadas ANTES de init quedan bajo la misma etiqueta.
-  const root = tmp();
-  execFileSync('git', ['-C', root, 'init', '-q']);
-  assert.equal(gitRemoteName(root), null, 'sin origin no hay nombre de remote');
-  execFileSync('git', ['-C', root, 'remote', 'add', 'origin', 'git@github.com:Acme/Backend_API.git']);
-  assert.equal(gitRemoteName(root), 'backend_api');
-  assert.equal(engramProject(root), 'backend_api', 'gana el remote sobre la carpeta');
-  execFileSync('git', ['-C', root, 'remote', 'set-url', 'origin', 'https://github.com/acme/web-app']);
-  assert.equal(engramProject(root), 'web-app');
-  fs.rmSync(root, { recursive: true, force: true });
-});
-
 // --- preferencias del proyecto -------------------------------------------------
 
 test('las preferencias respetan flag > guardado > pregunta > default', async () => {
@@ -1035,16 +861,6 @@ test('un valor invalido en un flag se rechaza en vez de aceptarse a medias', () 
     assert.ok(vals.includes(DEFAULTS[k]), `el default de ${k} debe ser una opcion valida`);
 });
 
-test('la segmentacion de Engram no es una preferencia: no se pregunta ni se puede apagar', () => {
-  assert.equal(DEFAULTS.engramScope, undefined);
-  assert.equal(CHOICES.engramScope, undefined);
-  const step = STEPS.find((s) => s.id === 'engram-scope');
-  const root = tmp();
-  assert.notEqual(step.status({ ...ctxFor(root), prefs: { engramScope: 'global' } }).state, 'skip',
-    'un config.json viejo con engramScope:global ya no desactiva el paso');
-  fs.rmSync(root, { recursive: true, force: true });
-});
-
 test('graphify no es una preferencia: ningun comando la consulta ni init la pregunta', () => {
   assert.equal(DEFAULTS.graphify, undefined);
   assert.equal(CHOICES.graphify, undefined);
@@ -1077,12 +893,14 @@ test('los comandos declaran que la memoria es por proyecto y prohiben cruzarla p
   for (const lang of ['es', 'en']) {
     for (const f of ['build', 'change']) {
       const src = fs.readFileSync(path.join(LAYER, 'commands', lang, `${f}.md`), 'utf8');
-      assert.match(src, /\.engram\/config\.json/, `${lang}/${f}: debe nombrar el binding`);
-      assert.match(src, /all_projects/, `${lang}/${f}: debe nombrar el unico modo que cruza`);
-      assert.doesNotMatch(src, /engramScope/, `${lang}/${f}: la preferencia ya no existe`);
+      assert.match(src, /\.un-specweaver\/engram/, `${lang}/${f}: debe decir donde vive la memoria`);
+      // El modo de fallo real ya no es cruzar proyectos (cada uno tiene su base) sino el
+      // plugin global, que ninguna config de proyecto vence.
+      assert.match(src, /plugin/i, `${lang}/${f}: debe advertir del plugin global`);
+      assert.doesNotMatch(src, /engramScope|all_projects/, `${lang}/${f}: diseño anterior`);
     }
     const skill = fs.readFileSync(path.join(LAYER, 'skills', 'un-specweaver', `SKILL.${lang}.md`), 'utf8');
-    assert.match(skill, /\.engram\/config\.json/, `SKILL.${lang}: debe nombrar el binding`);
+    assert.match(skill, /\.un-specweaver\/engram/, `SKILL.${lang}: debe decir donde vive la memoria`);
     assert.doesNotMatch(skill, /engramScope/, `SKILL.${lang}`);
   }
 });
@@ -1103,12 +921,6 @@ test('un paso que falla solo detiene a los que dependen de el', async () => {
   assert.equal(results.find((r) => r.id === 'b').ok, false, 'b depende de a: se omite');
   assert.equal(results.find((r) => r.id === 'c').ok, true, 'c no depende de a: debe correr igual');
   fs.rmSync(root, { recursive: true, force: true });
-});
-
-test('engram-scope no se arrastra por un fallo de gentle-config', () => {
-  // Verifica el binario por su cuenta; declarar la dependencia lo hacia caer de gratis.
-  const step = STEPS.find((s) => s.id === 'engram-scope');
-  assert.equal(step.dependsOn, undefined, 'engram-scope no debe depender de gentle-config');
 });
 
 test('los agentes elegidos quedan guardados y no se re-detectan', async () => {
@@ -1162,11 +974,6 @@ test('config.json es del proyecto y local.json de la maquina: lo que cambia por 
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('ignora el cache de skills de Gentle-AI en la raiz del proyecto', () => {
-  // .atl/ aparecio reseteando un proyecto a mano: lo deja gentle-config y se iba a commitear.
-  assert.ok(gitignoreBlock([]).includes('.atl/'), '.atl/ es cache regenerable, no va al repo');
-});
-
 test('solo se declaran soportados los agentes probados de punta a punta', () => {
   // Codex se saco: su toolchain desactualizada hacia fallar gentle-config en cada corrida
   // y nunca se probo el flujo completo con el. Soportar a medias es peor que no soportar.
@@ -1197,4 +1004,117 @@ test('el hook del dashboard se agrega al post-commit sin pisar lo que ya habia, 
   assert.equal(step.status(ctxFor(root)).state, 'ok');
   assert.equal(step.plan(ctxFor(root))[0].content.split('un-specweaver: dashboard').length - 1, 1, 'no se duplica');
   fs.rmSync(root, { recursive: true, force: true });
+});
+
+// --- aislamiento: todo lo que produce el metodo, dentro de .un-specweaver ------------------
+
+test('el layout nuevo vive en .un-specweaver, y un proyecto de 0.5.x se sigue leyendo', () => {
+  const root = tmp();
+  let P = paths(root);
+  assert.equal(P.openspec, path.join(root, HOME, 'openspec'), 'por defecto, dentro');
+  assert.equal(P.bmadOutRel, path.join(HOME, 'bmad'));
+  assert.equal(P.openspecCwd, path.join(root, HOME), 'openspec no busca hacia arriba: cwd es el padre');
+  assert.equal(P.legacy, false);
+
+  // Proyecto de 0.5.x: openspec/ y _bmad-output/ en la raiz. Se detectan y se siguen usando
+  // hasta que corra `migrate`; actualizar la herramienta no puede romperlos en silencio.
+  fs.mkdirSync(path.join(root, 'openspec', 'changes'), { recursive: true });
+  fs.mkdirSync(path.join(root, '_bmad-output'), { recursive: true });
+  P = paths(root);
+  assert.equal(P.legacy, true);
+  assert.equal(P.openspec, path.join(root, 'openspec'));
+  assert.equal(P.openspecCwd, root);
+  assert.equal(P.bmadOut, path.join(root, '_bmad-output'));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('BMAD manda su output adentro pero se instala en la raiz: sus skills solo sirven ahi', () => {
+  // VERIFICADO: con --directory .un-specweaver las skills caen en .un-specweaver/.claude/skills,
+  // donde el agente no las ve. Por eso se muda el output, no la instalacion.
+  const root = tmp();
+  const args = STEPS.find((s) => s.id === 'bmad').plan(ctxFor(root))[0].args;
+  assert.equal(args[args.indexOf('--directory') + 1], root);
+  assert.equal(args[args.indexOf('--output-folder') + 1], path.join(HOME, 'bmad'));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('OpenSpec se inicializa dentro de .un-specweaver y sin comandos de agente', () => {
+  const root = tmp();
+  const [a] = STEPS.find((s) => s.id === 'openspec').plan(ctxFor(root));
+  assert.deepEqual(a.args.slice(a.args.indexOf('init')), ['init', HOME, '--tools', 'none', '--language', 'Spanish']);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('la memoria de Engram queda dentro del proyecto, sin rutas absolutas en el repo', async () => {
+  // VERIFICADO contra engram 1.20: ENGRAM_DATA_DIR mueve la base entera y exige ruta absoluta.
+  // El wrapper la resuelve solo, asi que lo que se commitea es una ruta relativa.
+  const root = tmp();
+  const step = STEPS.find((s) => s.id === 'engram-project');
+  assert.equal(step.status(ctxFor(root)).state, 'pending');
+
+  const actions = step.plan(ctxFor(root));
+  const wrapper = actions.find((a) => a.kind === 'write' && a.file.endsWith(path.join('bin', 'engram')));
+  assert.ok(wrapper, 'falta el wrapper');
+  assert.equal(wrapper.mode, 0o755, 'tiene que ser ejecutable');
+  assert.match(wrapper.content, /ENGRAM_DATA_DIR/);
+  assert.match(wrapper.content, /dirname -- "\$0"/, 'resuelve su propia ruta, no una absoluta');
+  assert.doesNotMatch(wrapper.content, new RegExp(root), 'nada de esta maquina adentro');
+
+  for (const a of actions.filter((x) => x.kind === 'write')) await runAction(a, { root, lang: 'es' });
+  const mcp = JSON.parse(fs.readFileSync(path.join(root, '.mcp.json'), 'utf8'));
+  assert.equal(mcp.mcpServers.engram.command, `./${path.join(HOME, 'bin', 'engram')}`, 'relativa: Claude Code la resuelve contra el proyecto');
+  assert.equal(mcp.mcpServers.engram.command.includes(root), false);
+  const oc = JSON.parse(fs.readFileSync(path.join(root, 'opencode.json'), 'utf8'));
+  assert.equal(oc.mcp.engram.type, 'local');
+  assert.equal(oc.mcp.engram.command[0], mcp.mcpServers.engram.command);
+  assert.equal(step.status(ctxFor(root)).state, 'ok');
+
+  // El wrapper de verdad apunta adentro: se ejecuta con un engram falso en el PATH.
+  const bin = path.join(root, 'fakebin');
+  fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, 'engram'), '#!/bin/sh\necho "$ENGRAM_DATA_DIR"\n');
+  fs.chmodSync(path.join(bin, 'engram'), 0o755);
+  const out = execFileSync(path.join(root, HOME, 'bin', 'engram'), ['x'], { cwd: os.tmpdir(), env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } }).toString().trim();
+  assert.equal(out, path.join(root, HOME, 'engram'), 'la memoria queda en el proyecto aunque el cwd sea otro');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('otros servidores MCP del usuario sobreviven al registro de la memoria', () => {
+  const root = tmp();
+  fs.writeFileSync(path.join(root, '.mcp.json'), JSON.stringify({ mcpServers: { context7: { command: 'npx' } } }));
+  const cfg = mcpConfigFor(root, { id: 'claude-code' }, './x');
+  const j = JSON.parse(cfg.content);
+  assert.ok(j.mcpServers.context7, 'no se pisan');
+  assert.ok(j.mcpServers.engram);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('el plugin global de Engram se detecta y se avisa: ninguna config de proyecto lo vence', () => {
+  const home = tmp();
+  assert.equal(globalEngramPlugin(home), false);
+  fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'engram@engram': true } }));
+  assert.equal(globalEngramPlugin(home), true);
+  for (const lang of ['es', 'en']) assert.match(t(lang, 'step.engram.pluginWarning'), /claude plugin disable engram/);
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+test('Engram se instala solo, sin Gentle-AI y sin ejecutar scripts remotos', () => {
+  const root = tmp();
+  const actions = STEPS.find((s) => s.id === 'engram-bin').plan(ctxFor(root));
+  assert.ok(!actions.some((a) => a.kind === 'shell'), 'nada de curl | bash');
+  const a = actions[0];
+  if (a.kind === 'exec') assert.ok(['brew', 'go'].includes(a.cmd), a.cmd);
+  else assert.ok(['note', 'blocked'].includes(a.kind));
+  assert.equal(VENDORS.gentle.detectOnly, true, 'Gentle-AI solo se detecta');
+  assert.equal(VENDORS.engram.brewFormula, 'engram', 'un solo item que confiar, no tres');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('el gitignore ignora la memoria y el wrapper, pero no lo que el equipo comparte', () => {
+  const b = gitignoreBlock([]);
+  assert.match(b, new RegExp(`^${HOME}/engram/$`, 'm'), 'SQLite binario: no se mergea');
+  assert.match(b, new RegExp(`^${HOME}/bin/$`, 'm'));
+  assert.ok(!new RegExp(`^${HOME}/$`, 'm').test(b), 'la carpeta entera NO se ignora: los specs son el producto');
+  for (const f of ['trace.json', 'config.json', 'openspec', 'bmad']) assert.ok(!b.includes(`${HOME}/${f}`), f);
 });

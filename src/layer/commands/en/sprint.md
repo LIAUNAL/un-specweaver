@@ -20,9 +20,9 @@ npx un-specweaver bridge --dry-run
 
 The wave plan comes from the dependency graph, not from progress. Cross-check it with reality:
 
-- `openspec list` — which changes exist
-- `openspec/changes/<id>/tasks.md` — how many boxes are ticked
-- `openspec/changes/archive/` — what is already closed
+- `npx un-specweaver status` — which changes exist and how they are doing
+- `.un-specweaver/openspec/changes/<id>/tasks.md` — how many boxes are ticked
+- `.un-specweaver/openspec/changes/archive/` — what is already closed
 
 A wave whose changes are archived is done, even if the plan still shows it.
 

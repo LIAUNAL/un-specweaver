@@ -42,13 +42,11 @@ conversation; skipping it lets new behavior in with nobody approving it.
 ## Boundary rule
 
 BMAD **ends at the story**. From there the contract is the OpenSpec spec, and building happens
-against it. Gentle-AI's SDD phases are not used: they redo work BMAD already did earlier and in
-more depth (epics, stories, criteria, FR coverage).
+against it, directly: there are no intermediate phases to orchestrate.
 
-What **is** used from Gentle-AI are its ceremony-free skills: `judgment-day` (adversarial
-review), `work-unit-commits`, `branch-pr`, `chained-pr`, and the `review-readability` /
-`review-reliability` / `review-resilience` / `review-risk` subagents. Invoke them by asking
-in plain language.
+Gentle-AI is **not installed** by this setup: it would touch the user's global configuration and
+clash with their own install. If it happens to be on PATH, its review skills (`judgment-day`,
+`work-unit-commits`, `branch-pr`) can be offered when closing — but check before naming them.
 `bmad-agent-dev`, `bmad-build`, `bmad-build-auto` and `bmad-spec` are pruned from this
 installation on purpose. If you cannot find them, that is not an error: do not look for BMAD
 developer agents, and do not use `bmad-spec` in place of OpenSpec.
@@ -59,8 +57,8 @@ Before looking for something, know where it lives. Do not duplicate across layer
 
 | Data | Where it lives | Do not look in |
 |---|---|---|
-| Product intent (the business *what*) | `_bmad-output/` (PRD, epics) | the specs |
-| Behavior contract (the technical *what*) | `openspec/specs/` | the PRD |
+| Product intent (the business *what*) | `.un-specweaver/bmad/` (PRD, epics) | the specs |
+| Behavior contract (the technical *what*) | `.un-specweaver/openspec/specs/` | the PRD |
 | Decisions and rationale (the *why*) | Engram **if present**, else `design.md` | the docs |
 | History of a requirement (what changed and why) | BMAD `.memlog.md` + `sprint-change-proposal-*.md` + `changelog.jsonl`, via `un-specweaver history <FR>` | the agent's memory |
 | Code structure (the *where*) | graphify graph **if present** | reading files blind |
@@ -72,7 +70,7 @@ would otherwise assume.
 
 ## Rules that apply across the whole flow
 
-1. **Specs are derived.** They are regenerated from `_bmad-output/epics.md` with
+1. **Specs are derived.** They are regenerated from `.un-specweaver/bmad/planning-artifacts/epics.md` with
    `npx un-specweaver bridge`, not hand-edited. If a spec is wrong, epics.md is wrong.
 2. **Scope is controlled before touching files**, not after. See `/sw:change`.
 3. **One developer, one change at a time.** Stories are sized for exactly that.
@@ -103,14 +101,15 @@ it on every commit. It is the only witness of the **real** structure of the code
 
 ## Optional capabilities
 
-**Engram** is installed by Gentle-AI, but can be blocked by Homebrew trust. If `engram` is not
-on PATH, write the rationale in the change's `design.md` under `## Decisions` and say so.
-Never lose it silently.
+**Engram** is installed by `init` (via Homebrew or `go install`). If `engram` is not on PATH,
+write the rationale in the change's `design.md` under `## Decisions` and say so. Never lose it
+silently.
 
-Engram memory is **always scoped per project**: `.engram/config.json` pins the name, and every
-Engram MCP server honors it. Do not search with `all_projects` or a foreign `project` unless the
-user asks: another project's memory read as if it were this one's is the easiest way to
-hallucinate with a citation.
+Memory lives **inside the project**, at `.un-specweaver/engram`: not a label over a shared
+database, a database of its own. Deleting the folder deletes the memory, and no other project
+sees it. Known limit: if the user has the **global Engram plugin** in Claude Code, its tools live
+in another namespace and keep writing to `~/.engram`. If you see two sets of memory tools, use
+the project's and say so; `doctor` reports it.
 
 **uv** (Python) is used by BMAD to resolve its configuration, and it is one of the two ways
 (with pipx) `init` installs graphify. If BMAD cannot find it, its skills have a manual fallback.

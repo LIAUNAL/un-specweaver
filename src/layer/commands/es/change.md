@@ -66,7 +66,7 @@ El puente sabe que esta regenerando, no creando:
 
 - si el change existe y esta en curso, **conserva las casillas marcadas** de `tasks.md` y te dice
   cuales se perdieron porque la tarea cambio de texto
-- si el requisito **ya esta archivado** (vive en `openspec/specs/`), emite `## MODIFIED Requirements`
+- si el requisito **ya esta archivado** (vive en `.un-specweaver/openspec/specs/`), emite `## MODIFIED Requirements`
   en un change nuevo `<id>-r2`, `-r3`… — el anterior sigue en `archive/`. Reutiliza los nombres de
   escenario archivados porque OpenSpec los exige; el contenido si se actualiza
 - si la story **perdio** un escenario ya archivado, el puente **falla y no escribe**: OpenSpec no
@@ -81,17 +81,20 @@ olas posteriores, avisa cuales se ven impactados.
 ## Paso 4 — Reverificar
 
 ```
-npx @fission-ai/openspec validate --all --strict
+npx un-specweaver validate
 ```
 
 ## Paso 5 — Registrar el por que
 
-Engram es **opcional**, y su memoria **siempre esta segmentada por proyecto**: `.engram/config.json`
-fija el nombre bajo el que se guarda y se busca. Lo que guardes aqui no aparece en otros
-proyectos, y lo de otros proyectos no aparece aqui, salvo que pidas explicitamente una busqueda
-cross-proyecto (`all_projects`). No lo hagas por defecto: una memoria de otro proyecto que se
-cuela como si fuera de este es una alucinacion con fuente. Si `mem_current_project` no devuelve
-`project_source: "config"`, el binding falta — corre `npx un-specweaver init` antes de guardar.
+Engram es **opcional**, y su memoria vive **dentro del proyecto**: `.un-specweaver/engram` es
+una base propia, no una etiqueta sobre una base compartida. Lo que guardes aqui no existe para
+ningun otro proyecto, y borrar `.un-specweaver/` lo borra.
+
+**Limite conocido, y el unico modo de fallo real:** si el usuario tiene el **plugin global de
+Engram** en Claude Code, sus herramientas viven en otro namespace (`mcp__plugin_engram_*`) y
+siguen escribiendo en `~/.engram`, fuera del proyecto. Ninguna configuracion de proyecto lo
+vence. Si ves dos juegos de herramientas de memoria, **usa las del proyecto y dilo**; guardar el
+rationale en la base equivocada es perderlo sin enterarte. `npx un-specweaver doctor` lo reporta.
 
 - **Si `engram` esta en PATH** → guarda ahi la decision y su razon.
 - **Si no esta** → escribela igual, en `design.md` del change bajo `## Decisions`, y **avisa

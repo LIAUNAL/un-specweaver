@@ -34,7 +34,7 @@ The CLI does not check this. Verify by hand:
 **Complete traceability.** Every PRD FR must appear in `.un-specweaver/trace.json`.
 An FR with no change is a requirement nobody will build.
 
-**No orphan specs.** Every change in `openspec/changes/` must have an entry in `trace.json`.
+**No orphan specs.** Every change in `.un-specweaver/openspec/changes/` must have an entry in `trace.json`.
 One without it was created by hand outside the bridge: it has no story behind it and will not
 survive the next regeneration.
 
@@ -47,7 +47,7 @@ every design phase is running without the organization's constraints.
 ## Step 3 — Valid specs
 
 ```
-npx @fission-ai/openspec validate --all --strict
+npx un-specweaver validate
 ```
 
 ## Step 4 — Summarize

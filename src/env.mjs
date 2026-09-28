@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { t } from './i18n.mjs';
+import { paths, rel } from './paths.mjs';
 
 export const VENDORS = JSON.parse(fs.readFileSync(new URL('./vendors.json', import.meta.url), 'utf8'));
 
@@ -118,57 +119,30 @@ export function untrustedItems(tap, names, home = os.homedir(), env = process.en
 // Se detecta por la misma razon que graphify: el fallo grave seria que un comando diga
 // "registra esto en Engram", no pase nada, y el rationale se pierda en silencio.
 
-// Nombre de repo tal como lo deriva engram de `origin` (extractRepoName + normalize):
-// ultimo segmento de la URL, sin .git, en minusculas. Se replica para que las memorias
-// guardadas ANTES de correr init (por autodeteccion) queden bajo el mismo nombre.
-export function gitRemoteName(root) {
-  try {
-    const url = execFileSync('git', ['-C', root, 'remote', 'get-url', 'origin'], { stdio: ['ignore', 'pipe', 'ignore'] })
-      .toString().trim().replace(/\.git$/, '');
-    const name = url.split(/[/:]/).filter(Boolean).pop() || '';
-    return name.trim().toLowerCase() || null;
-  } catch { return null; }
-}
-
-// Nombre de proyecto para Engram: estable y derivado del repo. Es la etiqueta que separa
-// la memoria de un proyecto de la de otro. Primero el remote (lo mismo que engram
-// autodetecta); sin remote, la carpeta en forma segura.
-export function engramProject(root) {
-  const remote = gitRemoteName(root);
-  if (remote) return remote;
-  return path.basename(path.resolve(root)).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-}
-
-export const ENGRAM_CONFIG = path.join('.engram', 'config.json');
-
-// Lee a que proyecto quedo atada la memoria. La fuente es .engram/config.json: es el
-// caso 0 de la deteccion de engram (mayor prioridad) y lo respetan TODOS sus servidores
-// MCP — el plugin de Claude Code, el global de Gentle-AI, OpenCode y el CLI — porque
-// todos resuelven por cwd.
-export function engramBinding(root) {
-  try {
-    const j = JSON.parse(fs.readFileSync(path.join(root, ENGRAM_CONFIG), 'utf8'));
-    return String(j.project_name || '').trim().toLowerCase() || null;
-  } catch { return null; }
-}
-
-// Version anterior: un servidor "engram" con --project en .mcp.json. En Claude Code
-// convivia con el plugin de Engram y el agente veia dos juegos de herramientas de
-// memoria; en OpenCode no aplicaba (no lee .mcp.json). Se detecta para retirarlo.
-export function legacyEngramMcp(root) {
-  try {
-    const j = JSON.parse(fs.readFileSync(path.join(root, '.mcp.json'), 'utf8'));
-    const srv = j.mcpServers?.engram;
-    if (!srv) return null;
-    const i = (srv.args || []).indexOf('--project');
-    if (i >= 0 && srv.args[i + 1]) return srv.args[i + 1];
-    return srv.env?.ENGRAM_PROJECT || null;
-  } catch { return null; }
-}
-
+// Memoria de Engram: donde vive de verdad. Con ENGRAM_DATA_DIR la base entera es del
+// proyecto (antes se compartia ~/.engram/engram.db y solo cambiaba la etiqueta --project).
 export function detectEngram(root) {
+  const P = paths(root);
   const bin = which('engram');
-  return { available: !!bin, bin, project: engramBinding(root), legacyMcp: !!legacyEngramMcp(root) };
+  const wrapper = fs.existsSync(P.engramBin);
+  const db = fs.existsSync(path.join(P.engram, 'engram.db'));
+  return {
+    available: !!bin,
+    bin,
+    dir: rel(root, P.engram),
+    isolated: wrapper,
+    hasMemory: db,
+    // El plugin global de Claude Code vive en otro namespace y ninguna config de proyecto lo
+    // vence: si esta activo, sus herramientas siguen escribiendo en ~/.engram.
+    globalPlugin: globalEngramPlugin(),
+  };
+}
+
+export function globalEngramPlugin(home = os.homedir()) {
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8'));
+    return Object.keys(j.enabledPlugins || {}).some((k) => /^engram@/.test(k));
+  } catch { return false; }
 }
 
 export function isGitRepo(dir) {
@@ -183,7 +157,7 @@ export function isGitRepo(dir) {
 const PROJECT_KEYS = ['version', 'preferences', 'pruneExtra'];
 
 export function readState(root) {
-  const dir = path.join(root, '.un-specweaver');
+  const dir = paths(root).home;
   const read = (f) => { try { return JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); } catch { return null; } };
   const config = read('config.json');
   if (!config) return null;
@@ -196,7 +170,7 @@ export function readState(root) {
 }
 
 export function writeState(root, state) {
-  const dir = path.join(root, '.un-specweaver');
+  const dir = paths(root).home;
   fs.mkdirSync(dir, { recursive: true });
   const { agents: _prefAgents, ...projectPrefs } = state.preferences || {};
   const config = { version: 2, preferences: projectPrefs };

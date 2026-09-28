@@ -7,7 +7,7 @@ allowed-tools: Bash(npx:*), Bash(git:*), Read, Glob
 
 # /sw:sync — actualizar el entorno
 
-BMAD y Gentle-AI se actualizan casi a diario. Este proyecto los tiene **pineados** a proposito:
+BMAD, OpenSpec y graphify se actualizan casi a diario. Este proyecto los tiene **pineados** a proposito:
 lo que se rompe con una actualizacion no deseada es el flujo entero.
 
 ## Paso 1 — Ver el estado
@@ -42,7 +42,7 @@ viven en `openspec/`, que este comando no toca.
 
 ```
 npx un-specweaver doctor
-npx @fission-ai/openspec validate --all --strict
+npx un-specweaver validate
 ```
 
 Si un vendor cambio de formato y los specs ya no validan, revierte con git y reporta que version

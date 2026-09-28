@@ -8,7 +8,7 @@ allowed-tools: Bash(npx:*), Bash(git:*), Read, Glob, Grep
 # /sw:close — cerrar stories terminadas
 
 Construir no es cerrar. Una story esta **terminada** cuando sus tareas estan hechas; esta
-**cerrada** cuando su spec se archivo y paso a `openspec/specs/`: la linea base contra la que
+**cerrada** cuando su spec se archivo y paso a `.un-specweaver/openspec/specs/`: la linea base contra la que
 `/sw:change` mide todo lo que llega despues. Caso real: 22 stories terminadas, cero cerradas,
 y `/sw:change` sin nada contra que comparar.
 
@@ -43,4 +43,4 @@ El error de `validate` apunta al spec, pero el spec es derivado: **el problema e
 ## Paso 4 — Confirmar
 
 `npx un-specweaver status`: la tile "specs archivadas" ya no debe estar en ambar. Si commiteas,
-`openspec/specs/` y `openspec/changes/archive/` van al repo: son el producto.
+`.un-specweaver/openspec/specs/` y `.un-specweaver/openspec/changes/archive/` van al repo: son el producto.

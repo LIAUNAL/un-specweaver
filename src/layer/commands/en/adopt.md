@@ -65,7 +65,7 @@ For each capability that already works, write its spec in `openspec/specs/<capab
 with `## Purpose` and its `### Requirement:` entries in present tense. This baseline is what
 `/sw:change` measures scope against; without it, scope control has nothing to compare to.
 
-Verify: `npx @fission-ai/openspec validate --all --strict`
+Verify: `npx un-specweaver validate`
 
 ## Phase 5 — From here on
 

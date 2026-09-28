@@ -27,60 +27,32 @@
     "npm": "@fission-ai/openspec",
     "version": "1.10.0"
   },
-  "gentle": {
-    "bin": "gentle-ai",
-    "version": "v2.4.0",
-    "installer": "https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/scripts/install.sh",
+  "engram": {
+    "_comment": "Engram se instala solo, sin Gentle-AI. VERIFICADO: `brew install gentleman-programming/tap/engram` funciona en macOS y Linux (su propia documentacion lo declara asi), y sin brew queda `go install`. Antes lo instalaba el pipeline de gentle-ai, que ademas escribia ~/.engram, ~/.claude/mcp/engram.json y la config de cada agente: contaminacion global que este montaje ya no produce.",
+    "bin": "engram",
     "brewTap": "gentleman-programming/tap",
-    "brewFormula": "gentle-ai",
-    "brewFormulae": [
-      "gentle-ai",
-      "engram",
-      "gga"
-    ],
-    "trustNote": "VERIFICADO EN UNA MAQUINA REAL: el pipeline de gentle-ai instala varios items del tap (gentle-ai, engram, gga) y Homebrew exige confianza POR ITEM y POR TIPO — engram esta publicado como formula Y cask, y confiar solo la formula no basta. Ademas `brew tap-info` reporta el tap como 'Untrusted' aunque haya items suyos confiados, asi que se lee trust.json. Si una version futura de gentle-ai suma otro item, el error lo nombra y se agrega aqui.",
-    "skills": [
-      "_shared",
-      "branch-pr",
-      "chained-pr",
-      "cognitive-doc-design",
-      "comment-writer",
-      "go-testing",
-      "issue-creation",
-      "issue-root-resolution",
+    "brewFormula": "engram",
+    "goPackage": "github.com/Gentleman-Programming/engram/cmd/engram@latest",
+    "isolationNote": "VERIFICADO contra engram 1.20: ENGRAM_DATA_DIR mueve la base de datos entera (no solo la etiqueta --project) y exige ruta ABSOLUTA. Por eso init genera .un-specweaver/bin/engram, un wrapper que resuelve su propia ubicacion: los agentes lo invocan por ruta relativa y la memoria queda dentro del proyecto pase lo que pase con el cwd. Borrar .un-specweaver borra la memoria.",
+    "pluginNote": "LIMITE CONOCIDO: el plugin de Engram para Claude Code (engram@engram) registra su servidor en OTRO namespace (mcp__plugin_engram_engram__*) y ninguna configuracion de proyecto lo vence — sus herramientas siguen escribiendo en ~/.engram. Un servidor de proyecto con el mismo nombre si gana sobre uno de alcance de usuario. Se detecta y se avisa; desactivarlo es decision del usuario.",
+    "shareNote": "La base es SQLite binario: se ignora en git. Para compartir el rationale con el equipo, engram trae `sync`, que exporta chunks + manifest en un formato pensado para git."
+  },
+  "gentle": {
+    "_comment": "YA NO SE INSTALA NI SE CONFIGURA. Aportaba dos cosas: instalar Engram (ahora directo) y skills de revision opcionales. Ademas escribia configuracion global y chocaba con quien ya lo tuviera instalado. Se DETECTA: si esta en el PATH, /sw:build ofrece sus skills; si no, no se mencionan. Sus fases SDD nunca se usaron: la regla de frontera dice que BMAD cubre la planeacion y /sw:build construye contra el spec.",
+    "bin": "gentle-ai",
+    "detectOnly": true,
+    "reviewSkills": [
       "judgment-day",
-      "skill-creator",
-      "skill-improver",
-      "skill-registry",
-      "systemic-issue-triage",
-      "work-unit-commits"
+      "work-unit-commits",
+      "branch-pr",
+      "chained-pr"
     ],
-    "skillPrefixes": [
-      "sdd-",
-      "rdd-",
-      "gentle-ai-"
-    ],
-    "doneMarker": "sdd-apply",
-    "skillsNote": "VERIFICADO: gentle-ai 2.4 instala ~25 skills y 10 comandos en el proyecto y ya NO crea .atl/. El marcador de que el paso corrio es la skill sdd-apply. Todo esto es regenerable con `gentle-ai install`, asi que va al .gitignore; si una version futura suma skills nuevas, `doctor` avisa que hay vendor sin ignorar en vez de dejar que se commiteen.",
-    "agentPrefixes": [
-      "sdd-",
-      "jd-",
-      "review-"
-    ],
-    "generatedDirs": [
-      "mcp",
-      "output-styles"
-    ],
-    "keepTracked": [
-      "CLAUDE.md",
-      "settings.json",
-      ".mcp.json"
-    ],
-    "keepTrackedNote": "Gentle-AI genera CLAUDE.md y settings.json, pero son los archivos que un humano edita. Ignorarlos perderia en silencio las reglas propias del usuario; committearlos solo mete ruido. Entre esos dos males, el ruido.",
-    "generatedProjectDirs": [
-      ".atl"
-    ],
-    "generatedProjectDirsNote": "Gentle-AI deja .atl/ en la raiz del proyecto: es el cache del registro de skills, regenerable con `gentle-ai skill-registry refresh`. Aparecio reseteando un proyecto a mano."
+    "reviewAgents": [
+      "review-readability",
+      "review-reliability",
+      "review-resilience",
+      "review-risk"
+    ]
   },
   "agents": {
     "claude-code": {
@@ -150,13 +122,6 @@
       "graphify-out/"
     ],
     "gitignoreNote": "graphify-out/ se ignora entero: es AST puro, regenerable en segundos con `un-specweaver init`, y el hook lo reescribe en cada commit — versionarlo seria un diff por commit. Las skills instaladas en el proyecto tambien son regenerables. .graphifyignore SI va al repo: es la regla del equipo."
-  },
-  "engram": {
-    "_comment": "VERIFICADO contra engram 1.20.0 (mem_current_project en una maquina real): el servidor MCP resuelve el proyecto por cwd en cada llamada, con esta prioridad: .engram/config.json (project_name) > git remote origin > raiz del repo git > unica carpeta hija con repo > basename. Sin nada de eso, la memoria se mezcla. La nota anterior ('la deteccion por directorio NO funciona') era de una version previa y ya no aplica.",
-    "bindingNote": "Se escribe .engram/config.json en vez de registrar 'engram mcp --project' en .mcp.json: (1) es el caso 0 de la deteccion y lo honran TODOS los servidores — el plugin engram@engram de Claude Code, el global que registra Gentle-AI, OpenCode y el CLI — porque todos resuelven por cwd; (2) .mcp.json solo lo lee Claude Code, y ahi el servidor extra convivia con el plugin: dos juegos de herramientas de memoria y el agente eligiendo al azar; (3) OpenCode nunca lo leia. El nombre se deriva igual que engram (repo del remote, minusculas) para que las memorias guardadas antes de init queden bajo la misma etiqueta.",
-    "readNote": "Las lecturas (mem_search, mem_context, mem_timeline) resuelven el mismo proyecto. Solo cruzan proyectos si el agente pasa all_projects=true o un project explicito, que engram valida contra la base. No es un muro, es un default: por eso la skill y los comandos prohiben cruzar salvo que el usuario lo pida.",
-    "mcpServer": "engram",
-    "configFile": ".engram/config.json"
   },
   "_agentsScope": "Solo Claude Code y OpenCode. Son los dos que este flujo soporta de punta a punta: ambos tienen formato de comandos documentado, ambos reciben las skills, y ambos se probaron end-to-end. Agregar un agente es agregar una entrada aqui, pero no se declara soportado hasta haberlo corrido completo."
 }

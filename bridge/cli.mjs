@@ -18,6 +18,7 @@ import { emitChange, capabilityPath, changeId, detectLang } from './emit-openspe
 import { planSprint, renderSprintPlan } from './plan-sprint.mjs';
 import { mergeTrace, mergeTasks, readMainSpec, normalizeName, archivedRevisions, appendLedger, sha256 } from './history.mjs';
 import { findDecisionSources } from './decisions.mjs';
+import { paths } from '../src/paths.mjs';
 
 // BMAD escribe epics.md en {planning_artifacts}, que es configurable (--set bmm.planning_artifacts).
 // Hardcodear la ruta fue un error: en una instalacion real quedo en
@@ -32,7 +33,7 @@ export function planningRoot(root) {
       if (m) return m[1].replace('{project-root}', root);
     } catch { /* siguiente */ }
   }
-  return path.join(root, '_bmad-output', 'planning-artifacts');
+  return path.join(paths(root).bmadOut, 'planning-artifacts');
 }
 
 // Los artefactos que BMAD produjo y que la construccion tiene que respetar.
@@ -79,9 +80,10 @@ export function findEpics(root) {
       if (m) candidates.push(path.join(m[1].replace('{project-root}', root), 'epics.md'));
     } catch { /* siguiente */ }
   }
+  const out = paths(root).bmadOut;
   candidates.push(
-    path.join(root, '_bmad-output', 'planning-artifacts', 'epics.md'),
-    path.join(root, '_bmad-output', 'epics.md'),
+    path.join(out, 'planning-artifacts', 'epics.md'),
+    path.join(out, 'epics.md'),
     path.join(root, 'docs', 'epics.md'),
   );
 
@@ -102,7 +104,7 @@ export function findEpics(root) {
         else if (e.name === 'epics.md') found.push(p);
       }
     };
-    walk(path.join(root, '_bmad-output'));
+    walk(paths(root).bmadOut);
   }
   return found;
 }
@@ -130,7 +132,7 @@ function parseArgs(argv) {
 // dos "## Purpose" y OpenSpec rechazaria el segundo.
 function readExistingCapabilities(root) {
   const found = new Set();
-  const specsDir = path.join(root, 'openspec', 'specs');
+  const specsDir = paths(root).specs;
   const walk = (dir, prefix = '') => {
     if (!fs.existsSync(dir)) return;
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -142,7 +144,7 @@ function readExistingCapabilities(root) {
   };
   walk(specsDir);
 
-  const changesDir = path.join(root, 'openspec', 'changes');
+  const changesDir = paths(root).changes;
   if (fs.existsSync(changesDir)) {
     for (const c of fs.readdirSync(changesDir, { withFileTypes: true })) {
       if (!c.isDirectory() || c.name === 'archive') continue;
@@ -182,7 +184,7 @@ async function main() {
 
   const root = path.resolve(opts.out);
   const existing = readExistingCapabilities(root);
-  const changesRoot = path.join(root, 'openspec', 'changes');
+  const changesRoot = paths(root).changes;
 
   const selected = [];
   for (const epic of doc.epics) {
@@ -258,9 +260,9 @@ async function main() {
 
   const plan = planSprint(doc);
   if (!opts.dryRun) {
-    const traceDir = path.join(root, '.un-specweaver');
-    const traceFile = path.join(traceDir, 'trace.json');
-    fs.mkdirSync(traceDir, { recursive: true });
+    const P = paths(root);
+    const traceFile = P.trace;
+    fs.mkdirSync(P.home, { recursive: true });
     // Se fusiona con lo que habia: `--only 1.2` no puede borrar la trazabilidad de las demas.
     let prev = null;
     try { prev = JSON.parse(fs.readFileSync(traceFile, 'utf8')); } catch { /* primera corrida */ }
@@ -271,7 +273,7 @@ async function main() {
       requirements: doc.requirements,
       changes: trace,
     }), null, 2) + '\n', 'utf8');
-    fs.writeFileSync(path.join(traceDir, 'sprint-plan.md'), renderSprintPlan(doc, plan) + '\n', 'utf8');
+    fs.writeFileSync(P.sprintPlan, renderSprintPlan(doc, plan) + '\n', 'utf8');
     // El ledger es el unico archivo con fecha: es historia. Una linea por corrida.
     appendLedger(root, {
       at: new Date().toISOString(),

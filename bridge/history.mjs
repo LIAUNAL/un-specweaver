@@ -10,6 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { paths } from '../src/paths.mjs';
 
 // --- 1. trace.json se fusiona, no se sobreescribe -----------------------------------------
 // La identidad estable es la story (1.2), no el changeId: una revision cambia el id (-r2)
@@ -57,7 +58,7 @@ export function mergeTasks(oldMd, newMd) {
 // OpenSpec exige que se conserven (verificado contra 1.10: un MODIFIED que no trae todos
 // los escenarios actuales por nombre exacto se rechaza en archive).
 export function readMainSpec(root, capability) {
-  const file = path.join(root, 'openspec', 'specs', capability, 'spec.md');
+  const file = path.join(paths(root).specs, capability, 'spec.md');
   const out = new Map();
   let md;
   try { md = fs.readFileSync(file, 'utf8'); } catch { return out; }
@@ -100,7 +101,7 @@ export function reconcileScenarioNames(candidates, existing) {
 // archivarla necesita un id nuevo (el archive rechaza el duplicado) y ese id lleva la
 // revision, que ademas queda escrita en trace.json.
 export function archivedRevisions(root, baseId) {
-  const dir = path.join(root, 'openspec', 'changes', 'archive');
+  const dir = paths(root).archive;
   let names;
   try { names = fs.readdirSync(dir); } catch { return 0; }
   const re = new RegExp(`^\\d{4}-\\d{2}-\\d{2}-${baseId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:-r(\\d+))?$`);
@@ -118,14 +119,14 @@ export const revisedId = (baseId, revision) => (revision > 1 ? `${baseId}-r${rev
 // Append-only y con fecha: es historia, y la historia tiene fechas. Por eso es el UNICO
 // archivo del puente con timestamp; trace.json y los changes siguen siendo deterministas.
 export function appendLedger(root, record) {
-  const dir = path.join(root, '.un-specweaver');
-  fs.mkdirSync(dir, { recursive: true });
-  fs.appendFileSync(path.join(dir, 'changelog.jsonl'), JSON.stringify(record) + '\n', 'utf8');
+  const P = paths(root);
+  fs.mkdirSync(P.home, { recursive: true });
+  fs.appendFileSync(P.ledger, JSON.stringify(record) + '\n', 'utf8');
 }
 
 export function readLedger(root) {
   try {
-    return fs.readFileSync(path.join(root, '.un-specweaver', 'changelog.jsonl'), 'utf8')
+    return fs.readFileSync(paths(root).ledger, 'utf8')
       .split('\n').filter(Boolean).map((l) => JSON.parse(l));
   } catch { return []; }
 }

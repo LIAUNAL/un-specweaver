@@ -10,6 +10,7 @@ import { findEpics, planningRoot, findPlanningArtifacts } from '../../bridge/cli
 import { readLedger } from '../../bridge/history.mjs';
 import { collectDecisions, instabilityRanking, requirementHistory, refKey } from '../../bridge/decisions.mjs';
 import { VENDORS, readState, detectEngram, detectGraphify } from '../env.mjs';
+import { paths, rel } from '../paths.mjs';
 
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
 const exists = (f) => fs.existsSync(f);
@@ -40,7 +41,7 @@ export function taskList(md) {
 
 // Los changes de OpenSpec, activos y archivados, con su estado derivado.
 export function readChanges(root, trace) {
-  const dir = path.join(root, 'openspec', 'changes');
+  const dir = paths(root).changes;
   const byId = new Map((trace?.changes || []).map((c) => [c.changeId, c]));
   const out = [];
   if (!exists(dir)) return out;
@@ -127,7 +128,7 @@ export function phases(root, artifacts, trace, changes) {
     { n: 1, key: 'understand', done: prd.length > 0, artifacts: [...brief, ...prd] },
     { n: 2, key: 'decide', done: arch.length > 0, partial: arch.length > 0 && !ux.length, artifacts: [...arch, ...ux] },
     { n: 3, key: 'decompose', done: epics.length > 0, artifacts: epics },
-    { n: 4, key: 'translate', done: !!trace && (trace.changes || []).length > 0, artifacts: trace ? [{ file: '.un-specweaver/trace.json', date: mtime(path.join(root, '.un-specweaver', 'trace.json')) }] : [], count: trace?.changes?.length || 0 },
+    { n: 4, key: 'translate', done: !!trace && (trace.changes || []).length > 0, artifacts: trace ? [{ file: rel(root, paths(root).trace), date: mtime(paths(root).trace) }] : [], count: trace?.changes?.length || 0 },
     { n: 5, key: 'build', done: changes.length > 0 && active.every((c) => c.state === 'done'), partial: active.some((c) => c.state !== 'pending'), count: active.length },
     { n: 6, key: 'close', done: changes.length > 0 && archived.length === changes.length, partial: archived.length > 0, count: archived.length },
   ];
@@ -338,7 +339,7 @@ export function keyDecisions(decisions, limit = 40) {
 export function collectStatus(root) {
   root = path.resolve(root);
   const state = readState(root);
-  const trace = readJson(path.join(root, '.un-specweaver', 'trace.json'));
+  const trace = readJson(paths(root).trace);
   const pr = planningRoot(root);
   const artifacts = findPlanningArtifacts(root);
   const changes = readChanges(root, trace);
@@ -375,14 +376,14 @@ export function collectStatus(root) {
     impacts: impacts(decisions, trace, ledger),
     timeline: tl,
     graph: { available: !!g.bin, path: g.graph, html: exists(path.join(root, VENDORS.graphify.outDir, 'graph.html')) ? path.join(VENDORS.graphify.outDir, 'graph.html') : null, nodes: graph?.nodes?.length ?? null, edges: graph?.edges?.length ?? null },
-    engram: { available: e.available, project: e.project },
+    engram: { available: e.available, isolated: e.isolated, dir: e.dir, globalPlugin: e.globalPlugin },
   };
 }
 
 // Regenera el dashboard si ya existe: lo llaman bridge y close al terminar, porque son los
 // comandos que cambian el estado del proyecto. Si nadie lo genero nunca, no se inventa.
 export async function refreshDashboard(root) {
-  const out = path.join(root, '.un-specweaver', 'dashboard.html');
+  const out = paths(root).dashboard;
   if (!exists(out)) return false;
   const { renderHtml } = await import('./render.mjs');
   const model = collectStatus(root);

@@ -21,6 +21,9 @@ USO
                                    que tienen sus tareas completas · --dry-run: solo lista)
   npx un-specweaver status [dir]   en que va el proyecto: fases, changes, sprint, requisitos, decisiones
                                    --html escribe .un-specweaver/dashboard.html · --open lo abre · --json
+  npx un-specweaver validate       valida todos los specs (envuelve a OpenSpec)
+  npx un-specweaver migrate        muda un proyecto de 0.5.x al layout consolidado
+  npx un-specweaver reset          quita TODO lo que la herramienta creo (pide confirmacion)
   npx un-specweaver vendors           muestra las versiones pineadas
 
 INIT
@@ -132,7 +135,8 @@ switch (cmd) {
     const root = path.resolve(process.cwd());
     const pr = planningRoot(root);
     let trace = null;
-    try { trace = JSON.parse((await import('node:fs')).readFileSync(path.join(root, '.un-specweaver', 'trace.json'), 'utf8')); } catch { /* sin puente aun */ }
+    const { paths } = await import('../src/paths.mjs');
+    try { trace = JSON.parse((await import('node:fs')).readFileSync(paths(root).trace, 'utf8')); } catch { /* sin puente aun */ }
     const id = o._[0];
     if (!id) {
       const { sources, entries } = collectDecisions(root, pr);
@@ -189,7 +193,8 @@ switch (cmd) {
     if (o.json) { console.log(JSON.stringify(model, null, 2)); process.exit(0); }
     if (o.html) {
       const fs = await import('node:fs');
-      const out = path.join(root, '.un-specweaver', 'dashboard.html');
+      const { paths } = await import('../src/paths.mjs');
+      const out = paths(root).dashboard;
       fs.mkdirSync(path.dirname(out), { recursive: true });
       fs.writeFileSync(out, renderHtml(model, lang), 'utf8');
       console.log(`${path.relative(root, out)} (${fs.statSync(out).size} bytes)`);
@@ -203,11 +208,61 @@ switch (cmd) {
     process.exit(0);
   }
 
+  case 'validate': {
+    // OpenSpec no busca hacia arriba: corre con cwd = el padre de openspec/. El flujo nunca
+    // lo invoca a mano; por eso esta envuelto aqui.
+    const { paths } = await import('../src/paths.mjs');
+    const root = path.resolve(o._[0] || process.cwd());
+    const r = spawnSync('npx', ['--yes', `${VENDORS.openspec.npm}@${VENDORS.openspec.version}`, 'validate', '--all', '--strict'],
+      { cwd: paths(root).openspecCwd, stdio: 'inherit', env: { ...process.env, OPENSPEC_TELEMETRY: '0' } });
+    process.exit(r.status ?? 1);
+  }
+
+  case 'migrate': {
+    const { migrate, migrationPlan } = await import('../src/manage.mjs');
+    const root = path.resolve(o._[0] || process.cwd());
+    const plan = migrationPlan(root);
+    if (!plan.needed) { console.log('\nNada que migrar: este proyecto ya usa el layout consolidado.\n'); process.exit(0); }
+    console.log('\nMudanza al layout consolidado (.un-specweaver):\n');
+    for (const m of plan.moves) console.log(`  ${path.relative(root, m.from)}  ->  ${path.relative(root, m.to)}`);
+    for (const e of plan.edits) console.log(`  ~ ${path.relative(root, e.file)} — ${e.what}`);
+    if (o.dryRun) { console.log('\n--dry-run: no se movio nada.\n'); process.exit(0); }
+    const r = migrate(root);
+    console.log(`\n${r.moved} carpeta(s) movida(s) con git mv (el historial de cada archivo se conserva), ${r.edits.length} archivo(s) reescrito(s).`);
+    console.log('Revisa con `git status` y commitea. Despues corre `npx un-specweaver init` para el resto.\n');
+    process.exit(0);
+  }
+
+  case 'reset': {
+    // Quitar el montaje entero. Pide confirmacion: borra la memoria y los specs del proyecto.
+    const { reset } = await import('../src/manage.mjs');
+    const readline = await import('node:readline/promises');
+    const root = path.resolve(o._[0] || process.cwd());
+    const { items, clean } = reset(root, { dryRun: true });
+    if (!items.length && !clean.length) { console.log('\nNo hay nada de un-specweaver en este proyecto.\n'); process.exit(0); }
+    console.log('\nSe va a borrar:\n');
+    for (const it of items) console.log(`  ${it.kind === 'data' ? '!' : '-'} ${path.relative(root, it.target).padEnd(40)} ${it.what}`);
+    for (const c of clean) console.log(`  ~ ${path.relative(root, c.file).padEnd(40)} ${c.what}`);
+    console.log('\n  ! .un-specweaver contiene los specs, la trazabilidad y la memoria del proyecto.');
+    console.log('    Lo demas se regenera con `npx un-specweaver init`.\n');
+    if (o.dryRun) { console.log('--dry-run: no se borro nada.\n'); process.exit(0); }
+    if (!o.yes) {
+      if (!process.stdin.isTTY) { console.error('Sin terminal no se asume consentimiento: usa --yes.\n'); process.exit(2); }
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      const a = (await rl.question('Escribi "borrar" para confirmar: ')).trim().toLowerCase();
+      rl.close();
+      if (a !== 'borrar') { console.log('Cancelado.\n'); process.exit(1); }
+    }
+    const r = reset(root);
+    console.log(`\n${r.removed} elemento(s) borrado(s), ${r.clean.length} archivo(s) limpiado(s).\n`);
+    process.exit(0);
+  }
+
   case 'vendors':
     console.log(`\nversiones pineadas (${path.basename(new URL('../src/vendors.json', import.meta.url).pathname)})\n`);
     console.log(`  bmad      ${VENDORS.bmad.npm}@${VENDORS.bmad.version}   modulos: ${VENDORS.bmad.modules}   podado: ${VENDORS.bmad.prune.join(', ')}`);
     console.log(`  openspec  ${VENDORS.openspec.npm}@${VENDORS.openspec.version}`);
-    console.log(`  gentle    ${VENDORS.gentle.bin} ${VENDORS.gentle.version}`);
+    console.log(`  engram    ${VENDORS.engram.brewTap}/${VENDORS.engram.brewFormula} (memoria aislada por proyecto)`);
     console.log(`  graphify  ${VENDORS.graphify.pip}@${VENDORS.graphify.version}   solo codigo (${VENDORS.graphify.ignoreFile})`);
     console.log(`\n  Para subir un vendor: edita src/vendors.json, publica, y "un-specweaver doctor" reporta el drift.\n`);
     process.exit(0);

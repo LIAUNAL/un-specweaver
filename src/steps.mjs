@@ -3,9 +3,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { VENDORS, which, vendorIds, isGitRepo, untrustedItems, engramProject, engramBinding, legacyEngramMcp, ENGRAM_CONFIG,
+import { VENDORS, which, vendorIds, isGitRepo, untrustedItems, globalEngramPlugin,
          detectGraphify, GRAPHIFY_IGNORE_START, GRAPHIFY_IGNORE_END } from './env.mjs';
 import { t } from './i18n.mjs';
+import { paths, HOME, rel } from './paths.mjs';
 
 const LAYER = new URL('./layer/', import.meta.url);
 const readAsset = (rel) => fs.readFileSync(new URL(rel, LAYER), 'utf8');
@@ -108,13 +109,18 @@ export function gitignoreBlock(_agentsIgnored) {
   const agents = Object.values(VENDORS.agents);
   const lines = [GITIGNORE_START, '# Regenerable con `un-specweaver init` — no va al repo.', '',
                  'node_modules/', '_bmad/', '**/.openspec-target',
+                 // Memoria del proyecto: SQLite binario, no mergeable. Se comparte, si se
+                 // quiere, con `un-specweaver memory share` (formato de git de engram).
+                 `${HOME}/engram/`,
+                 // Wrapper generado por init: se regenera, y su contenido depende de la maquina.
+                 `${HOME}/bin/`,
                  // AST puro, regenerable en segundos; el hook lo reescribe en cada commit.
                  `${VENDORS.graphify.outDir}/`,
                  // Vista derivada de `status --html`: se regenera, no se versiona.
-                 '.un-specweaver/dashboard.html',
+                 `${HOME}/dashboard.html`,
                  // Estado de ESTA maquina (agentes, rutas, pasos): un diff por compañero si se commitea.
-                 '.un-specweaver/local.json',
-                 ...VENDORS.gentle.generatedProjectDirs.map((d) => `${d}/`), ''];
+                 `${HOME}/local.json`,
+                 ''];
   // Cada vendor escribe en sitios distintos. OpenSpec ademas crea <dir-del-agente>/skills/,
   // que no aparece en la config porque BMAD manda las skills de OpenCode a .agents/skills.
   // Se deriva del directorio propio del agente para no dejar esa ruta fuera.
@@ -122,19 +128,13 @@ export function gitignoreBlock(_agentsIgnored) {
   const dirs = [...new Set([...agents.flatMap((a) => [a.skills, a.commands].filter(Boolean)), ...siblings])].sort();
   for (const d of dirs) {
     if (d.endsWith('skills')) {
+      // Solo lo que ESTE montaje genera. Lo que instale el usuario por su cuenta (incluido
+      // Gentle-AI, que ya no instalamos) es suyo y decide el si lo versiona.
       lines.push(`${d}/bmad-*/`, `${d}/openspec-*/`, `${d}/un-specweaver/`, `${d}/graphify/`);
-      // Gentle-AI instala ~25 skills mas. Se enumeran porque no comparten un prefijo unico
-      // y porque ignorar `${d}/` entero escondería las skills propias del usuario.
-      for (const pre of VENDORS.gentle.skillPrefixes) lines.push(`${d}/${pre}*/`);
-      for (const sk of VENDORS.gentle.skills) lines.push(`${d}/${sk}/`);
     } else {
       lines.push(`${d}/${NAMESPACE}/`, `${d}/${NAMESPACE}-*.md`, `${d}/opsx/`, `${d}/opsx-*.md`, `${d}/bmad-*.md`);
-      for (const pre of VENDORS.gentle.skillPrefixes) lines.push(`${d}/${pre}*.md`);
     }
   }
-  // Config de agente generada por Gentle-AI. CLAUDE.md y settings.json quedan fuera de
-  // esta lista a proposito: los genera, pero son los que un humano edita, y perder las
-  // reglas propias en silencio es peor que un poco de ruido en git.
   const homes = [...new Set([
     ...agents.map((a) => (a.commands ? path.dirname(a.commands) : null)).filter(Boolean),
     ...agentHomes(agents),
@@ -143,13 +143,9 @@ export function gitignoreBlock(_agentsIgnored) {
   // comandos) se ignora por patron. Un home que Gentle-AI creo entero (.config/opencode,
   // que no es donde viven las skills ni los comandos de OpenCode) se puede ignorar completo.
   const sharedWithUser = new Set(agents.flatMap((a) => [a.skills, a.commands].filter(Boolean).map((d) => path.dirname(d))));
-  for (const h of homes) {
-    for (const d of VENDORS.gentle.generatedDirs) lines.push(`${h}/${d}/`);
-    for (const pre of VENDORS.gentle.agentPrefixes) lines.push(`${h}/agents/${pre}*.md`);
-    if (!sharedWithUser.has(h)) lines.push(`${h}/`);
-  }
+  for (const h of homes) if (!sharedWithUser.has(h)) lines.push(`${h}/`);
 
-  lines.push('', `# Al repo SI van: openspec/, _bmad-output/, docs/, .un-specweaver/, .engram/config.json, ${VENDORS.graphify.ignoreFile}, ${VENDORS.gentle.keepTracked.join(', ')}`, GITIGNORE_END);
+  lines.push('', `# Al repo SI van: ${HOME}/ (specs, planeacion, trazabilidad, config), docs/, ${VENDORS.graphify.ignoreFile}`, GITIGNORE_END);
   return lines.join('\n') + '\n';
 }
 
@@ -191,6 +187,63 @@ function mergeMarkedBlock(current, block, start, end) {
   return without.trimEnd() ? `${without.trimEnd()}\n\n${block}` : block;
 }
 
+// Wrapper que fija la memoria al proyecto. Resuelve su propia ruta: no depende del cwd desde
+// el que arranque el agente, ni lleva rutas absolutas de una maquina.
+export const ENGRAM_WRAPPER = `#!/bin/sh
+# Generado por un-specweaver. La memoria de Engram de ESTE proyecto vive junto a este script.
+# Regenerable con \`npx un-specweaver init\`; no lo edites a mano.
+set -e
+here=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ENGRAM_DATA_DIR="$here/engram"
+export ENGRAM_DATA_DIR
+mkdir -p "$ENGRAM_DATA_DIR"
+exec engram "$@"
+`;
+
+// Cada agente declara sus servidores MCP en su propio archivo y con su propia forma.
+// VERIFICADO en la documentacion de cada uno: Claude Code resuelve un `command` relativo
+// contra la raiz del proyecto; OpenCode fusiona el config del proyecto sobre el global.
+export function mcpConfigFor(root, agent, relBin) {
+  const merge = (file, apply) => {
+    let j = {};
+    try { j = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { /* nuevo */ }
+    apply(j);
+    return { file, content: JSON.stringify(j, null, 2) + '\n' };
+  };
+  if (agent.id === 'claude-code') {
+    return merge(path.join(root, '.mcp.json'), (j) => {
+      j.mcpServers = j.mcpServers || {};
+      // Mismo nombre que el servidor de usuario a proposito: el de proyecto gana.
+      j.mcpServers.engram = { command: relBin, args: ['mcp', '--tools=agent'] };
+    });
+  }
+  if (agent.id === 'opencode') {
+    return merge(path.join(root, 'opencode.json'), (j) => {
+      j['$schema'] = j['$schema'] || 'https://opencode.ai/config.json';
+      j.mcp = j.mcp || {};
+      j.mcp.engram = { type: 'local', command: [relBin, 'mcp', '--tools=agent'], enabled: true };
+    });
+  }
+  return null;
+}
+
+// Que le falta al aislamiento de memoria: el wrapper y la config de cada agente.
+export function engramIsolation(root, agents) {
+  const P = paths(root);
+  const missing = [];
+  if (!fs.existsSync(P.engramBin)) missing.push(P.engramBin);
+  for (const a of agents) {
+    const cfg = mcpConfigFor(root, a, 'x');
+    if (!cfg) continue;
+    try {
+      const j = JSON.parse(fs.readFileSync(cfg.file, 'utf8'));
+      const cmd = j.mcpServers?.engram?.command || j.mcp?.engram?.command?.[0];
+      if (!cmd || !String(cmd).includes(HOME)) missing.push(cfg.file);
+    } catch { missing.push(cfg.file); }
+  }
+  return { missing, legacyGlobalServer: false };
+}
+
 export const STEPS = [
   {
     id: 'gitignore',
@@ -230,11 +283,16 @@ export const STEPS = [
     },
     plan(ctx) {
       const v = VENDORS.bmad;
+      // --directory sigue siendo la raiz a proposito: BMAD instala sus skills en
+      // <directory>/.claude/skills, y el agente SOLO lee las de la raiz del proyecto
+      // (verificado: con --directory .un-specweaver quedan donde nadie las ve).
+      // Lo que si se muda es el output, que es lo que el metodo produce.
       const args = [
         '--yes', `${v.npm}@${v.version}`, 'install', '--yes',
         '--directory', ctx.root,
         '--modules', v.modules,
         '--tools', vendorIds(ctx.agents, 'bmad'),
+        '--output-folder', paths(ctx.root).bmadOutRel,
         '--communication-language', ctx.langName,
         '--document-output-language', ctx.langName,
         // Sin esto, --yes instala shims deprecados que reenvian a skills que este
@@ -285,115 +343,87 @@ export const STEPS = [
     blocks: 'plan',
     titleKey: 'step.openspec.title',
     status(ctx) {
-      return fs.existsSync(path.join(ctx.root, 'openspec'))
-        ? { state: 'ok', detail: t(ctx.lang, 'step.openspec.ok') }
-        : { state: 'pending', detail: `npm ${VENDORS.openspec.npm}@${VENDORS.openspec.version}` };
+      const P = paths(ctx.root);
+      if (!fs.existsSync(P.openspec)) return { state: 'pending', detail: `npm ${VENDORS.openspec.npm}@${VENDORS.openspec.version}` };
+      return { state: 'ok', detail: t(ctx.lang, P.legacy ? 'step.openspec.legacy' : 'step.openspec.ok') };
     },
     plan(ctx) {
       const v = VENDORS.openspec;
+      // Dentro de .un-specweaver. OpenSpec no busca hacia arriba, asi que sus comandos se
+      // corren con cwd = esa carpeta; el flujo nunca los invoca a mano (los envuelve el CLI).
+      // --tools none: la superficie del agente son los /sw:*, no los comandos de OpenSpec,
+      // que ademas se podaban despues.
       return [exec('npx', [
-        '--yes', `${v.npm}@${v.version}`, 'init', ctx.root,
-        '--tools', vendorIds(ctx.agents, 'openspec'),
+        '--yes', `${v.npm}@${v.version}`, 'init', HOME,
+        '--tools', 'none',
         '--language', ctx.langName,
       ], t(ctx.lang, 'step.openspec.why'))];
     },
   },
 
   {
-    id: 'gentle-bin',
+    id: 'engram-bin',
     blocks: 'build',
-    titleKey: 'step.gentle-bin.title',
+    titleKey: 'step.engram-bin.title',
     status(ctx) {
-      const bin = which(VENDORS.gentle.bin);
-      return bin ? { state: 'ok', detail: bin } : { state: 'pending', detail: t(ctx.lang, 'step.gentle-bin.missing') };
+      const bin = which(VENDORS.engram.bin);
+      return bin ? { state: 'ok', detail: bin } : { state: 'pending', detail: t(ctx.lang, 'step.engram-bin.missing') };
     },
     plan(ctx) {
-      const v = VENDORS.gentle;
-      if (which(v.bin)) return [note(t(ctx.lang, 'step.gentle-bin.already', v.bin))];
-      if (ctx.platform === 'darwin' && which('brew')) {
-        return [exec('brew', ['install', `${v.brewTap}/${v.brewFormula}`], t(ctx.lang, 'step.gentle-bin.brew'))];
+      const v = VENDORS.engram;
+      if (which(v.bin)) return [note(t(ctx.lang, 'step.engram-bin.already', which(v.bin)))];
+      // Homebrew sirve en macOS y Linux (documentado por engram). La alternativa oficial sin
+      // brew es `go install`. No hay `curl | bash`: no hace falta ejecutar codigo remoto.
+      if (which('brew')) {
+        const missing = untrustedItems(v.brewTap, [v.brewFormula]);
+        if (missing && missing.length) {
+          const cmds = missing.map((m) => `       brew trust --${m.kind} ${m.name}`).join('\n');
+          return [blocked(
+            t(ctx.lang, 'step.engram-bin.untrusted', missing.map((m) => `${m.name} (${m.kind})`).join(', ')),
+            t(ctx.lang, 'step.engram-bin.untrustedWhy'),
+            t(ctx.lang, 'step.engram-bin.untrustedFix', cmds),
+          )];
+        }
+        return [exec('brew', ['install', `${v.brewTap}/${v.brewFormula}`], t(ctx.lang, 'step.engram-bin.brew'))];
       }
-      return [shell(`curl -fsSL ${v.installer} | bash`, t(ctx.lang, 'step.gentle-bin.curl'))];
+      if (which('go')) return [exec('go', ['install', v.goPackage], t(ctx.lang, 'step.engram-bin.go'))];
+      return [blocked(t(ctx.lang, 'step.engram-bin.noInstaller'), t(ctx.lang, 'step.engram-bin.noInstallerWhy'), t(ctx.lang, 'step.engram-bin.noInstallerFix'))];
     },
   },
 
   {
-    id: 'gentle-config',
+    id: 'engram-project',
     blocks: 'build',
-    dependsOn: 'gentle-bin',
-    titleKey: 'step.gentle-config.title',
-    status(ctx) {
-      if (!which(VENDORS.gentle.bin)) return { state: 'pending', detail: t(ctx.lang, 'step.gentle-config.after') };
-      // gentle-ai 2.4 ya no crea .atl/. La evidencia de que corrio es que el SDD quedo
-      // instalado en el dir de skills del agente.
-      const done = ctx.agents.some((a) => fs.existsSync(path.join(ctx.root, a.skills, VENDORS.gentle.doneMarker)));
-      return done
-        ? { state: 'ok', detail: t(ctx.lang, 'step.gentle-config.ok') }
-        : { state: 'pending', detail: t(ctx.lang, 'step.gentle-config.pending', ctx.agents.map((a) => a.id).join(', ')) };
-    },
-    plan(ctx) {
-      const v = VENDORS.gentle;
-      const missing = untrustedItems(v.brewTap, v.brewFormulae);
-      if (missing && missing.length) {
-        // Item por item y tipo por tipo, no el tap entero: menos privilegio, y evita
-        // el caso de engram, que es formula y cask a la vez.
-        const cmds = missing.map((m) => `       brew trust --${m.kind} ${m.name}`).join('\n');
-        return [blocked(
-          t(ctx.lang, 'step.gentle.untrusted', missing.map((m) => `${m.name} (${m.kind})`).join(', ')),
-          t(ctx.lang, 'step.gentle.untrustedWhy'),
-          t(ctx.lang, 'step.gentle.untrustedFix', cmds, v.brewTap),
-        )];
-      }
-      // Este es el unico paso que escribe fuera del proyecto. Decirlo antes de correr,
-      // no despues de que el usuario lo descubra en su HOME.
-      // Un comando por agente. Pasarlos todos juntos hacia que un Codex desactualizado
-      // tumbara la configuracion de Claude Code, que no tenia nada malo.
-      return [
-        note(t(ctx.lang, 'step.gentle-config.globalWarning')),
-        note(t(ctx.lang, 'step.gentle-config.perAgent')),
-        ...ctx.agents.map((a) => exec(VENDORS.gentle.bin, [
-          'install', '--agents', a.ids.gentle, '--scope', 'workspace',
-        ], t(ctx.lang, 'step.gentle-config.why', a.id), { tolerateFailure: true })),
-      ];
-    },
-  },
-
-  {
-    id: 'engram-scope',
-    blocks: 'build',
-    // Sin dependsOn a proposito: el archivo que escribe no necesita el binario de engram,
-    // y declarar la dependencia hacia que un fallo de gentle-config lo arrastrara.
+    // Sin dependsOn: lo que escribe no necesita el binario, y asi un fallo de instalacion no
+    // deja el proyecto sin su configuracion de memoria.
     titleKey: 'step.engram.title',
     status(ctx) {
-      const bound = engramBinding(ctx.root);
-      const want = engramProject(ctx.root);
-      if (legacyEngramMcp(ctx.root)) return { state: 'pending', detail: t(ctx.lang, 'step.engram.legacy') };
-      return bound === want
-        ? { state: 'ok', detail: t(ctx.lang, 'step.engram.ok', bound) }
-        : { state: 'pending', detail: t(ctx.lang, 'step.engram.pending', want) };
+      const st = engramIsolation(ctx.root, ctx.agents);
+      const missing = st.missing.map((m) => rel(ctx.root, m));
+      if (st.legacyGlobalServer) return { state: 'pending', detail: t(ctx.lang, 'step.engram.legacy') };
+      return missing.length
+        ? { state: 'pending', detail: t(ctx.lang, 'step.engram.pending', missing.join(', ')) }
+        : { state: 'ok', detail: t(ctx.lang, 'step.engram.ok', rel(ctx.root, paths(ctx.root).engram)) };
     },
     plan(ctx) {
-      // VERIFICADO contra engram 1.20: .engram/config.json es el caso 0 de su deteccion de
-      // proyecto y lo honran todos sus servidores MCP (plugin de Claude Code, global de
-      // Gentle-AI, OpenCode, CLI) porque resuelven por cwd. Un solo archivo, un solo nombre,
-      // sin registrar un segundo servidor. Va al repo: el equipo comparte la etiqueta.
-      const project = engramProject(ctx.root);
-      const actions = [write(
-        path.join(ctx.root, ENGRAM_CONFIG),
-        JSON.stringify({ project_name: project }, null, 2) + '\n',
-        t(ctx.lang, 'step.engram.why', project),
-      )];
+      // VERIFICADO contra engram 1.20: ENGRAM_DATA_DIR mueve la base entera al proyecto, y
+      // exige ruta ABSOLUTA. Una ruta absoluta en un archivo que va al repo es de una maquina,
+      // asi que el que la resuelve es este wrapper: averigua su propia ubicacion y exporta la
+      // variable. Los agentes lo invocan por ruta relativa, que si es portable.
+      const P = paths(ctx.root);
+      const actions = [
+        note(t(ctx.lang, 'step.engram.isolation')),
+        write(P.engramBin, ENGRAM_WRAPPER, t(ctx.lang, 'step.engram.wrapper'), { mode: 0o755 }),
+      ];
 
-      // Migracion: la version anterior registraba un servidor "engram --project" en .mcp.json.
-      // En Claude Code duplicaba al plugin de Engram (dos juegos de herramientas de memoria).
-      // Se retira SOLO esa entrada; los demas servidores del usuario quedan intactos.
-      if (legacyEngramMcp(ctx.root)) {
-        const f = path.join(ctx.root, '.mcp.json');
-        const j = JSON.parse(fs.readFileSync(f, 'utf8'));
-        delete j.mcpServers.engram;
-        actions.push(note(t(ctx.lang, 'step.engram.legacyNote')));
-        actions.push(write(f, JSON.stringify(j, null, 2) + '\n', t(ctx.lang, 'step.engram.legacyWhy')));
+      const relBin = `./${rel(ctx.root, P.engramBin)}`;
+      for (const agent of ctx.agents) {
+        const cfg = mcpConfigFor(ctx.root, agent, relBin);
+        if (cfg) actions.push(write(cfg.file, cfg.content, t(ctx.lang, 'step.engram.mcp', agent.id)));
       }
+      // El plugin global de Engram (si esta) vive en otro namespace y NINGUNA configuracion de
+      // proyecto lo vence: sus herramientas escriben en ~/.engram. Se avisa, no se toca.
+      if (globalEngramPlugin()) actions.push(note(t(ctx.lang, 'step.engram.pluginWarning')));
       return actions;
     },
   },
@@ -480,7 +510,7 @@ export const STEPS = [
   {
     id: 'surface',
     blocks: 'none',
-    dependsOn: 'gentle-config',
+    dependsOn: 'bmad',
     titleKey: 'step.surface.title',
     status(ctx) {
       if (ctx.keepVendorCommands) return { state: 'skip', detail: '--keep-vendor-commands' };

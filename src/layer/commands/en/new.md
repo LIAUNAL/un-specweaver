@@ -31,7 +31,7 @@ With the user, in this order. Each step feeds the next; do not skip or paralleli
    precisely than the FRs. Skipping it leaves the build with no visual contract.
 5. `bmad-create-epics-and-stories` — epics and stories with Given/When/Then criteria
 
-Everything lands in `_bmad-output/`.
+Everything lands in `.un-specweaver/bmad/`.
 
 **About the two "designs" — they are not the same, and they are not done twice:**
 
@@ -47,7 +47,7 @@ external dependency, a migration, or something cross-cutting. The bridge **does 
 on purpose. Most changes do not need one.
 
 **Quality gate before moving on.** BMAD writes to `{planning_artifacts}`, which defaults to
-`_bmad-output/planning-artifacts/epics.md` but is configurable — the bridge discovers it on its
+`.un-specweaver/bmad/planning-artifacts/epics.md` but is configurable — the bridge discovers it on its
 own, do not assume the path. Open the file and verify by hand:
 - every PRD FR appears in the FR Coverage Map
 - every story has a complete `As a / I want / So that` narrative
@@ -71,7 +71,7 @@ Generates one change per story, `.un-specweaver/trace.json` (FR ↔ story ↔ ch
 ## Phase 3 — Verify
 
 ```
-npx @fission-ai/openspec validate --all --strict
+npx un-specweaver validate
 ```
 
 It must be fully green. If it fails, the problem is in epics.md, not in the generated spec.

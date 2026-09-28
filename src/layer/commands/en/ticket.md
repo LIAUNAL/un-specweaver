@@ -22,7 +22,7 @@ Comments matter: real scope usually lives in the discussion, not the title.
 
 ## Step 2 — Classify
 
-Find the related requirement in `openspec/specs/`. The criterion is binary:
+Find the related requirement in `.un-specweaver/openspec/specs/`. The criterion is binary:
 
 | | Defect | Requirement |
 |---|---|---|

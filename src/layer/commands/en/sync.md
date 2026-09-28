@@ -7,7 +7,7 @@ allowed-tools: Bash(npx:*), Bash(git:*), Read, Glob
 
 # /sw:sync — update the environment
 
-BMAD and Gentle-AI ship almost daily. This project pins them on purpose: an unwanted update
+BMAD, OpenSpec and graphify ship almost daily. This project pins them on purpose: an unwanted update
 breaks the whole flow.
 
 ## Step 1 — See the state
@@ -42,7 +42,7 @@ either: they live in `openspec/`, which this command does not modify.
 
 ```
 npx un-specweaver doctor
-npx @fission-ai/openspec validate --all --strict
+npx un-specweaver validate
 ```
 
 If a vendor changed format and specs no longer validate, revert with git and report which version

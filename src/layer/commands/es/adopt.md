@@ -65,7 +65,7 @@ con `## Purpose` y sus `### Requirement:` en presente. Esta linea base es contra
 `/sw:change` va a medir el alcance de todo lo que llegue despues; sin ella, el control de
 alcance no tiene contra que comparar.
 
-Verifica: `npx @fission-ai/openspec validate --all --strict`
+Verifica: `npx un-specweaver validate`
 
 ## Fase 5 — De aqui en adelante
 

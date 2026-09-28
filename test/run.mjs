@@ -8,6 +8,7 @@ import { parseEpics, slug } from '../bridge/parse-epics.mjs';
 import { emitChange, changeId, capabilityPath, normalizePerson, detectLang, langScores } from '../bridge/emit-openspec.mjs';
 import { planSprint } from '../bridge/plan-sprint.mjs';
 import { findEpics, findPlanningArtifacts } from '../bridge/cli.mjs';
+import { paths } from '../src/paths.mjs';
 import { parseMemlog, parseChangeProposal, extractRefs, collectDecisions, requirementHistory, instabilityRanking } from '../bridge/decisions.mjs';
 import { mergeTrace, mergeTasks, readMainSpec, reconcileScenarioNames, archivedRevisions, revisedId, readLedger } from '../bridge/history.mjs';
 
@@ -150,7 +151,7 @@ test('no sobrescribe un change existente sin --force', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bridge-'));
   const cli = [path.join(ROOT, 'bridge', 'cli.mjs'), FIXTURE, '--out', dir];
   execFileSync('node', cli, { stdio: 'pipe' });
-  const target = path.join(dir, 'openspec/changes/e1s1-registro-de-proveedor-con-nit/tasks.md');
+  const target = path.join(paths(dir).changes, 'e1s1-registro-de-proveedor-con-nit', 'tasks.md');
   fs.writeFileSync(target, 'EDITADO A MANO\n');
   const out = execFileSync('node', cli, { stdio: 'pipe' }).toString();
   assert.match(out, /omitido\s+e1s1/);
@@ -256,7 +257,7 @@ test('sin argumento el CLI descubre y corre; sin epics.md falla con mensaje util
   fs.copyFileSync(FIXTURE, path.join(pa, 'epics.md'));
   const out = execFileSync('node', [cli, '--out', root], { stdio: 'pipe' }).toString();
   assert.match(out, /epics\.md encontrado/);
-  assert.ok(fs.existsSync(path.join(root, 'openspec', 'changes')), 'no genero changes');
+  assert.ok(fs.existsSync(path.join(paths(root).openspec, 'changes')), 'no genero changes');
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -370,7 +371,7 @@ test('cada afirmacion del escenario es una tarea, no solo el THEN', () => {
 const CLI_BRIDGE = path.join(ROOT, 'bridge', 'cli.mjs');
 const freshProject = () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bridge-'));
-  fs.mkdirSync(path.join(dir, 'openspec', 'changes'), { recursive: true });
+  fs.mkdirSync(paths(dir).changes, { recursive: true });
   fs.copyFileSync(FIXTURE, path.join(dir, 'epics.md'));
   return dir;
 };
@@ -401,7 +402,7 @@ test('mergeTrace conserva por story y ordena; una revision reemplaza a su versio
 test('--force conserva las casillas marcadas por texto de tarea y reporta las perdidas', () => {
   const dir = freshProject();
   bridge(dir);
-  const tasks = path.join(dir, 'openspec', 'changes', 'e1s2-inicio-de-sesion-con-mfa', 'tasks.md');
+  const tasks = path.join(paths(dir).openspec, 'changes', 'e1s2-inicio-de-sesion-con-mfa', 'tasks.md');
   fs.writeFileSync(tasks, fs.readFileSync(tasks, 'utf8').replace('- [ ] 1.1', '- [x] 1.1').replace('- [ ] 2.1', '- [x] 2.1'));
   const out = bridge(dir, '--only', '1.2', '--force');
   assert.match(out, /2 tarea\(s\) hecha\(s\) conservada\(s\)/);
@@ -421,7 +422,7 @@ test('una story ya archivada se regenera como MODIFIED con revision y nombres de
   const dir = freshProject();
   bridge(dir);
   // Simula el archive de 1.1: el requisito pasa al spec principal y el change al archive.
-  const cap = path.join(dir, 'openspec', 'specs', 'autenticacion-y-sesion-de-proveedores');
+  const cap = path.join(paths(dir).openspec, 'specs', 'autenticacion-y-sesion-de-proveedores');
   fs.mkdirSync(cap, { recursive: true });
   fs.writeFileSync(path.join(cap, 'spec.md'), [
     '# autenticacion', '', '## Purpose', 'x', '', '## Requirements', '',
@@ -429,8 +430,8 @@ test('una story ya archivada se regenera como MODIFIED con revision y nombres de
     '#### Scenario: Ingreso un NIT válido y un correo con dominio corporativo', '- **WHEN** viejo', '- **THEN** viejo', '',
     '#### Scenario: Envío el formulario', '- **WHEN** viejo', '- **THEN** viejo', '',
   ].join('\n'));
-  fs.mkdirSync(path.join(dir, 'openspec', 'changes', 'archive', '2026-09-01-e1s1-registro-de-proveedor-con-nit'), { recursive: true });
-  fs.rmSync(path.join(dir, 'openspec', 'changes', 'e1s1-registro-de-proveedor-con-nit'), { recursive: true });
+  fs.mkdirSync(path.join(paths(dir).openspec, 'changes', 'archive', '2026-09-01-e1s1-registro-de-proveedor-con-nit'), { recursive: true });
+  fs.rmSync(path.join(paths(dir).openspec, 'changes', 'e1s1-registro-de-proveedor-con-nit'), { recursive: true });
   assert.equal(archivedRevisions(dir, 'e1s1-registro-de-proveedor-con-nit'), 1);
 
   // La story cambia el WHEN: el nombre derivado cambiaria, pero el archivado manda.
@@ -438,13 +439,13 @@ test('una story ya archivada se regenera como MODIFIED con revision y nombres de
   fs.writeFileSync(epics, fs.readFileSync(epics, 'utf8').replace('un correo con dominio corporativo', 'un correo corporativo verificado por DNS'));
   const out = bridge(dir, '--only', '1.1', '--force');
   assert.match(out, /e1s1-registro-de-proveedor-con-nit-r2 .*\[MODIFIED, revision 2\]/);
-  const delta = fs.readFileSync(path.join(dir, 'openspec', 'changes', 'e1s1-registro-de-proveedor-con-nit-r2', 'specs', 'autenticacion-y-sesion-de-proveedores', 'spec.md'), 'utf8');
+  const delta = fs.readFileSync(path.join(paths(dir).openspec, 'changes', 'e1s1-registro-de-proveedor-con-nit-r2', 'specs', 'autenticacion-y-sesion-de-proveedores', 'spec.md'), 'utf8');
   assert.match(delta, /^## MODIFIED Requirements$/m);
   assert.doesNotMatch(delta, /## Purpose/, 'la capability ya existe');
   assert.match(delta, /#### Scenario: Ingreso un NIT válido y un correo con dominio corporativo\n- \*\*GIVEN\*\*[^\n]*\n- \*\*WHEN\*\* ingreso un NIT válido y un correo corporativo verificado por DNS/, 'nombre archivado, contenido nuevo');
   const t = readTrace(dir).changes.find((c) => c.bmad.story === '1.1');
   assert.equal(t.revision, 2); assert.equal(t.delta, 'MODIFIED'); assert.equal(t.changeId, 'e1s1-registro-de-proveedor-con-nit-r2');
-  const proposal = fs.readFileSync(path.join(dir, 'openspec', 'changes', 'e1s1-registro-de-proveedor-con-nit-r2', 'proposal.md'), 'utf8');
+  const proposal = fs.readFileSync(path.join(paths(dir).openspec, 'changes', 'e1s1-registro-de-proveedor-con-nit-r2', 'proposal.md'), 'utf8');
   assert.match(proposal, /Revision 2 de la Story 1\.1/);
   assert.match(proposal, /modifica el requisito/);
 
@@ -458,7 +459,7 @@ test('una story ya archivada se regenera como MODIFIED con revision y nombres de
   assert.ok(err, 'debe fallar');
   assert.match(err.stderr.toString(), /perdio 1 escenario\(s\): "Envío el formulario"/);
   assert.match(err.stderr.toString(), /REMOVED Requirements/, 'dice como salir');
-  assert.ok(!fs.existsSync(path.join(dir, 'openspec', 'changes', 'e1s1-registro-de-proveedor-con-nit-r3')), 'no escribe un change inarchivable');
+  assert.ok(!fs.existsSync(path.join(paths(dir).openspec, 'changes', 'e1s1-registro-de-proveedor-con-nit-r3')), 'no escribe un change inarchivable');
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -477,8 +478,8 @@ test('readMainSpec y archivedRevisions leen lo que hay, sin explotar cuando no h
   const dir = freshProject();
   assert.equal(readMainSpec(dir, 'nada').size, 0);
   assert.equal(archivedRevisions(dir, 'e1s1-x'), 0);
-  fs.mkdirSync(path.join(dir, 'openspec', 'changes', 'archive', '2026-01-01-e1s1-x-r2'), { recursive: true });
-  fs.mkdirSync(path.join(dir, 'openspec', 'changes', 'archive', '2026-01-02-e1s1-xy'), { recursive: true });
+  fs.mkdirSync(path.join(paths(dir).openspec, 'changes', 'archive', '2026-01-01-e1s1-x-r2'), { recursive: true });
+  fs.mkdirSync(path.join(paths(dir).openspec, 'changes', 'archive', '2026-01-02-e1s1-xy'), { recursive: true });
   assert.equal(archivedRevisions(dir, 'e1s1-x'), 2, 'e1s1-xy no cuenta: el id se casa entero');
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -548,7 +549,7 @@ test('la historia de un requisito cruza memlogs, propuestas y puente, en orden',
 
   // Con trace.json y ledger, aparecen las corridas del puente sobre las stories que lo cubren.
   fs.copyFileSync(FIXTURE, path.join(dir, 'epics.md'));
-  fs.mkdirSync(path.join(dir, 'openspec', 'changes'), { recursive: true });
+  fs.mkdirSync(paths(dir).changes, { recursive: true });
   execFileSync('node', [CLI_BRIDGE, 'epics.md'], { cwd: dir, stdio: 'pipe' });
   const trace = readTrace(dir);
   const h2 = requirementHistory(dir, pr, 'FR001', trace);

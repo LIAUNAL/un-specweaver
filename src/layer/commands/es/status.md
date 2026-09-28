@@ -13,7 +13,7 @@ npx un-specweaver status --open     # .un-specweaver/dashboard.html en el navega
 ```
 
 Es una **vista derivada** de lo que ya esta en disco — PRD y memlogs de BMAD, `trace.json`,
-`openspec/changes/` y su `archive/`, `sprint-plan`, `changelog.jsonl`, el grafo de graphify.
+`.un-specweaver/openspec/changes/` y su `archive/`, `sprint-plan`, `changelog.jsonl`, el grafo de graphify.
 No guarda nada y se regenera cada vez; si algo se ve mal, esta mal en la fuente, no aqui.
 
 ## Interpreta, no pegues

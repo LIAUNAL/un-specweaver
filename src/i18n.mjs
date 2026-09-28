@@ -91,34 +91,6 @@ Los comandos, para tenerlos a mano:
     'step.openspec.title': 'OpenSpec (artefactos de especificacion)',
     'step.openspec.ok': 'openspec/ ya existe',
     'step.openspec.why': 'inicializa openspec/ y registra los comandos del agente',
-    'step.gentle-bin.title': 'Binario de Gentle-AI',
-    'step.gentle-bin.missing': 'no esta en PATH',
-    'step.gentle-bin.already': (b) => `${b} ya instalado`,
-    'step.gentle-bin.brew': 'via Homebrew: no ejecuta scripts remotos',
-    'step.gentle-bin.curl': 'via oficial de Gentle-AI: descarga y ejecuta un script remoto',
-    'step.gentle-config.title': 'Configurar Gentle-AI (SDD + Engram) en los agentes',
-    'step.gentle-config.after': 'corre despues de instalar el binario',
-    'step.gentle-config.ok': 'SDD instalado en el proyecto',
-    'step.gentle-config.pending': (a) => `agentes: ${a}`,
-    'step.gentle-config.why': (a) => `configura ${a} (alcance workspace para los assets de Gentle-AI)`,
-    'step.gentle-config.perAgent': `Se configura un agente por comando: si uno falla (toolchain
-     viejo, version incompatible), los demas quedan igual configurados.`,
-    'step.gentle-config.globalWarning': `ATENCION: Engram registra su servidor MCP fuera del proyecto —
-     ~/.engram/, ~/.claude/mcp/engram.json y la config de cada agente. --scope workspace
-     no lo contiene: la config MCP es global por naturaleza. Verificado en una maquina real.`,
-    'step.gentle.untrusted': (list) => `Homebrew no confia en: ${list}`,
-    'step.gentle.untrustedWhy': `Gentle-AI instala Engram como parte de su propio pipeline, y brew se niega a
-     cargar formulas no confiables. Autorizar una formula le da permiso de ejecutar codigo de
-     instalacion en tu maquina: es una decision tuya, un-specweaver no la toma por vos.`,
-    'step.gentle.untrustedFix': (cmds, tap) => `minimo privilegio — autoriza solo lo que falta:
-${cmds}
-
-     O de una vez el tap entero, si preferis no repetir esto cada vez que Gentle-AI
-     sume una dependencia (incluye tambien gentle-creation y gentleman-dots):
-       brew trust ${tap}
-
-     Y despues:
-       npx un-specweaver init`,
     'step.layer.title': 'Capa un-specweaver (comandos, skill, arquitectura base)',
     'step.layer.pending': (n) => `${n} archivo(s)`,
     'step.layer.ok': 'al dia',
@@ -149,8 +121,6 @@ ${cmds}
     'engram.name': 'engram',
     'engram.present': (b) => `presente (${b})`,
     'engram.absent': 'ausente — el flujo funciona, pero el rationale de las decisiones no se guarda',
-    'engram.scoped': (p) => `memoria segmentada como "${p}" (.engram/config.json)`,
-    'engram.unbound': 'sin .engram/config.json — engram autodetecta el proyecto, pero el nombre no queda fijado en el repo',
     'step.graphify-bin.title': 'Instalar graphify (mapa del codigo)',
     'step.graphify-bin.missing': 'graphify no esta en PATH',
     'step.graphify-bin.already': (b) => `${b} ya esta instalado`,
@@ -178,14 +148,37 @@ ${cmds}
     'step.dashboard-hook.ok': 'hook de post-commit instalado',
     'step.dashboard-hook.pending': 'agregar al post-commit',
     'step.dashboard-hook.why': 'si .un-specweaver/dashboard.html existe, cada commit lo regenera; una vista que solo se actualiza cuando alguien se acuerda es una vista vieja',
-    'step.engram.title': 'Segmentar la memoria de Engram por proyecto',
-    'step.engram.ok': (p) => `atada a "${p}"`,
-    'step.engram.pending': (p) => `escribir .engram/config.json con "${p}"`,
-    'step.engram.legacy': 'migrar: .mcp.json trae un servidor engram --project de una version anterior',
-    'step.engram.legacyNote': `El servidor "engram --project" en .mcp.json era de la version anterior. En Claude Code
-     convivia con el plugin de Engram y el agente veia dos juegos de herramientas de memoria;
-     OpenCode no lo leia. .engram/config.json lo reemplaza para todos los agentes.`,
-    'step.engram.legacyWhy': 'retira solo la entrada engram; los demas servidores MCP quedan igual',
+    'step.engram.title': 'Aislar la memoria de Engram dentro del proyecto',
+    'step.openspec.legacy': 'openspec/ en la raiz (layout anterior) — `un-specweaver migrate` lo muda',
+    'step.engram-bin.title': 'Instalar Engram (memoria de decisiones)',
+    'step.engram-bin.missing': 'engram no esta en PATH',
+    'step.engram-bin.already': (b) => `${b} ya instalado`,
+    'step.engram-bin.brew': 'via Homebrew (sirve en macOS y Linux): no ejecuta scripts remotos',
+    'step.engram-bin.go': 'via `go install`, la alternativa oficial sin Homebrew',
+    'step.engram-bin.untrusted': (list) => `Homebrew no confia en: ${list}`,
+    'step.engram-bin.untrustedWhy': `Autorizar una formula le da permiso de ejecutar codigo de instalacion en tu maquina:
+     es una decision tuya, un-specweaver no la toma por vos.`,
+    'step.engram-bin.untrustedFix': (cmds) => `autoriza y vuelve a intentar:\n${cmds}\n       npx un-specweaver init`,
+    'step.engram-bin.noInstaller': 'no hay Homebrew ni Go para instalar Engram',
+    'step.engram-bin.noInstallerWhy': `Engram es un binario de Go. Sus dos vias oficiales son Homebrew (macOS y Linux) y
+     \`go install\`; ninguna esta disponible aqui.`,
+    'step.engram-bin.noInstallerFix': `instala uno de los dos y vuelve a correr init:
+       /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+       npx un-specweaver init`,
+    'step.engram.ok': (d) => `memoria en ${d}`,
+    'step.engram.pending': (m) => `falta: ${m}`,
+    'step.engram.legacy': 'migrar desde el layout anterior',
+    'step.engram.isolation': `La memoria de este proyecto vive en .un-specweaver/engram, no en ~/.engram: borrar
+     la carpeta borra la memoria, y ningun otro proyecto la ve.`,
+    'step.engram.wrapper': 'wrapper que fija ENGRAM_DATA_DIR a este proyecto (resuelve su propia ruta: sin rutas absolutas de una maquina)',
+    'step.engram.mcp': (a) => `registra el servidor de memoria de ${a} apuntando al wrapper`,
+    'step.engram.pluginWarning': `AVISO: tenes el plugin global de Engram en Claude Code. Vive en otro namespace y
+     ninguna config de proyecto lo vence: sus herramientas siguen escribiendo en ~/.engram.
+     Para que la memoria de este proyecto sea la unica, desactivalo aqui:
+       claude plugin disable engram`,
+    'engram.isolated': (d) => `memoria del proyecto en ${d}`,
+    'engram.notIsolated': 'sin aislar — corre `npx un-specweaver init`',
+    'engram.plugin': 'ademas esta el plugin global de Claude Code: sus herramientas escriben en ~/.engram',
     'step.engram.why': (p) => `fija "${p}" como proyecto de Engram para todos los agentes; sin esto cada servidor deriva el nombre por su cuenta`,
 
   },
@@ -279,34 +272,6 @@ The commands, for reference:
     'step.openspec.title': 'OpenSpec (specification artifacts)',
     'step.openspec.ok': 'openspec/ already exists',
     'step.openspec.why': 'initializes openspec/ and registers the agent commands',
-    'step.gentle-bin.title': 'Gentle-AI binary',
-    'step.gentle-bin.missing': 'not on PATH',
-    'step.gentle-bin.already': (b) => `${b} already installed`,
-    'step.gentle-bin.brew': 'via Homebrew: runs no remote scripts',
-    'step.gentle-bin.curl': "Gentle-AI's official path: downloads and runs a remote script",
-    'step.gentle-config.title': 'Configure Gentle-AI (SDD + Engram) on the agents',
-    'step.gentle-config.after': 'runs after the binary is installed',
-    'step.gentle-config.ok': 'SDD installed in the project',
-    'step.gentle-config.pending': (a) => `agents: ${a}`,
-    'step.gentle-config.why': (a) => `configures ${a} (workspace scope for Gentle-AI assets)`,
-    'step.gentle-config.perAgent': `One agent per command: if one fails (stale toolchain,
-     incompatible version), the others still get configured.`,
-    'step.gentle-config.globalWarning': `HEADS UP: Engram registers its MCP server outside the project —
-     ~/.engram/, ~/.claude/mcp/engram.json and each agent's config. --scope workspace does not
-     contain it: MCP config is global by nature. Verified on a real machine.`,
-    'step.gentle.untrusted': (list) => `Homebrew does not trust: ${list}`,
-    'step.gentle.untrustedWhy': `Gentle-AI installs Engram as part of its own pipeline, and brew refuses to load
-     untrusted formulae. Trusting a formula grants it permission to run install code on your
-     machine: that is your decision, un-specweaver does not make it for you.`,
-    'step.gentle.untrustedFix': (cmds, tap) => `least privilege — authorize only what is missing:
-${cmds}
-
-     Or the whole tap at once, if you would rather not repeat this every time Gentle-AI
-     adds a dependency (it also includes gentle-creation and gentleman-dots):
-       brew trust ${tap}
-
-     Then:
-       npx un-specweaver init`,
     'step.layer.title': 'un-specweaver layer (commands, skill, base architecture)',
     'step.layer.pending': (n) => `${n} file(s)`,
     'step.layer.ok': 'up to date',
@@ -338,8 +303,6 @@ ${cmds}
     'engram.name': 'engram',
     'engram.present': (b) => `present (${b})`,
     'engram.absent': 'absent — the flow works, but decision rationale is not recorded',
-    'engram.scoped': (p) => `memory scoped as "${p}" (.engram/config.json)`,
-    'engram.unbound': 'no .engram/config.json — engram auto-detects the project, but the name is not pinned in the repo',
     'step.graphify-bin.title': 'Install graphify (code map)',
     'step.graphify-bin.missing': 'graphify is not on PATH',
     'step.graphify-bin.already': (b) => `${b} already installed`,
@@ -367,14 +330,37 @@ ${cmds}
     'step.dashboard-hook.ok': 'post-commit hook installed',
     'step.dashboard-hook.pending': 'append to post-commit',
     'step.dashboard-hook.why': 'if .un-specweaver/dashboard.html exists, every commit regenerates it; a view that only updates when someone remembers is a stale view',
-    'step.engram.title': 'Scope Engram memory to this project',
-    'step.engram.ok': (p) => `bound to "${p}"`,
-    'step.engram.pending': (p) => `write .engram/config.json with "${p}"`,
-    'step.engram.legacy': 'migrate: .mcp.json carries an engram --project server from a previous version',
-    'step.engram.legacyNote': `The "engram --project" server in .mcp.json came from the previous version. In Claude Code
-     it coexisted with the Engram plugin and the agent saw two sets of memory tools;
-     OpenCode never read it. .engram/config.json replaces it for every agent.`,
-    'step.engram.legacyWhy': 'removes only the engram entry; every other MCP server stays untouched',
+    'step.engram.title': 'Scope Engram memory inside the project',
+    'step.openspec.legacy': 'openspec/ at the project root (previous layout) — `un-specweaver migrate` moves it',
+    'step.engram-bin.title': 'Install Engram (decision memory)',
+    'step.engram-bin.missing': 'engram is not on PATH',
+    'step.engram-bin.already': (b) => `${b} already installed`,
+    'step.engram-bin.brew': 'via Homebrew (works on macOS and Linux): runs no remote scripts',
+    'step.engram-bin.go': 'via `go install`, the official path without Homebrew',
+    'step.engram-bin.untrusted': (list) => `Homebrew does not trust: ${list}`,
+    'step.engram-bin.untrustedWhy': `Authorizing a formula lets it run install code on your machine: that is your decision,
+     un-specweaver does not make it for you.`,
+    'step.engram-bin.untrustedFix': (cmds) => `authorize and try again:\n${cmds}\n       npx un-specweaver init`,
+    'step.engram-bin.noInstaller': 'neither Homebrew nor Go available to install Engram',
+    'step.engram-bin.noInstallerWhy': `Engram is a Go binary. Its two official paths are Homebrew (macOS and Linux) and
+     \`go install\`; neither is available here.`,
+    'step.engram-bin.noInstallerFix': `install one of them and run init again:
+       /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+       npx un-specweaver init`,
+    'step.engram.ok': (d) => `memory at ${d}`,
+    'step.engram.pending': (m) => `missing: ${m}`,
+    'step.engram.legacy': 'migrate from the previous layout',
+    'step.engram.isolation': `This project's memory lives in .un-specweaver/engram, not ~/.engram: deleting the folder
+     deletes the memory, and no other project sees it.`,
+    'step.engram.wrapper': 'wrapper pinning ENGRAM_DATA_DIR to this project (resolves its own path: no machine-specific absolutes)',
+    'step.engram.mcp': (a) => `registers ${a}'s memory server pointing at the wrapper`,
+    'step.engram.pluginWarning': `HEADS UP: the global Engram plugin is enabled in Claude Code. It lives in another namespace
+     and no project config overrides it: its tools keep writing to ~/.engram.
+     To make this project's memory the only one, disable it here:
+       claude plugin disable engram`,
+    'engram.isolated': (d) => `project memory at ${d}`,
+    'engram.notIsolated': 'not isolated — run `npx un-specweaver init`',
+    'engram.plugin': 'the global Claude Code plugin is also active: its tools write to ~/.engram',
     'step.engram.why': (p) => `pins "${p}" as the Engram project for every agent; without it each server derives the name on its own`,
 
   },

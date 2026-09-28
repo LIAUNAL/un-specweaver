@@ -14,7 +14,7 @@ La construccion es `/sw:build`, en otra conversacion.
 
 1. Corre `npx un-specweaver doctor`. **Solo detente si dice que hay pasos que bloquean la
    planeacion.** Un paso pendiente marcado "solo bloquea /sw:build" NO impide planear —
-   Gentle-AI hace falta para construir, no para levantar requerimientos. La ultima linea de
+   la memoria y el mapa del codigo hacen falta para construir, no para levantar requerimientos. La ultima linea de
    doctor te dice cual de los dos casos es.
 2. Lee `docs/architecture-base.md` completo y mantenlo como contexto durante todas las fases.
    Si sigue siendo la plantilla sin llenar, **dilo y pregunta** si llenarla ahora o seguir sin
@@ -33,7 +33,7 @@ Con el usuario, en este orden. Cada paso alimenta al siguiente; no los saltes ni
    con mas precision que los FR. Saltarlo deja la construccion sin contrato visual.
 5. `bmad-create-epics-and-stories` — epics y stories con criterios Given/When/Then
 
-Sale todo en `_bmad-output/`.
+Sale todo en `.un-specweaver/bmad/`.
 
 **Sobre los dos "diseños" — no son lo mismo y no se hacen dos veces:**
 
@@ -49,7 +49,7 @@ dependencia externa, migracion, o algo que atraviesa modulos. El puente **no lo 
 proposito. Para la mayoria de los changes no hace falta.
 
 **Puerta de calidad antes de seguir.** BMAD escribe en `{planning_artifacts}`, que por defecto es
-`_bmad-output/planning-artifacts/epics.md` pero es configurable — el puente lo descubre solo,
+`.un-specweaver/bmad/planning-artifacts/epics.md` pero es configurable — el puente lo descubre solo,
 no asumas la ruta. Abre el archivo y verifica a mano:
 - cada FR del PRD aparece en el FR Coverage Map
 - cada story tiene narrativa `As a / I want / So that` completa
@@ -73,7 +73,7 @@ Genera un change por story, `.un-specweaver/trace.json` (trazabilidad FR ↔ sto
 ## Fase 3 — Verificar
 
 ```
-npx @fission-ai/openspec validate --all --strict
+npx un-specweaver validate
 ```
 
 Tiene que dar 100% verde. Si falla, el problema esta en el epics.md, no en el spec generado.

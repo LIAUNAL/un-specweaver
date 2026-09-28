@@ -23,7 +23,7 @@ Los comentarios importan: el alcance real suele estar en la discusion, no en el 
 
 ## Paso 2 — Clasificar
 
-Busca en `openspec/specs/` el requisito relacionado. El criterio es binario:
+Busca en `.un-specweaver/openspec/specs/` el requisito relacionado. El criterio es binario:
 
 | | Defecto | Requerimiento |
 |---|---|---|

@@ -35,7 +35,7 @@ Esto no lo revisa el CLI. Verifica a mano:
 **Trazabilidad completa.** Cada FR del PRD debe aparecer en `.un-specweaver/trace.json`.
 Un FR sin change es un requisito que nadie va a construir.
 
-**Sin specs huerfanos.** Cada change en `openspec/changes/` debe tener su entrada en
+**Sin specs huerfanos.** Cada change en `.un-specweaver/openspec/changes/` debe tener su entrada en
 `trace.json`. Uno que no la tenga se creo a mano fuera del puente: no tiene story detras y no
 va a sobrevivir la proxima regeneracion.
 
@@ -48,7 +48,7 @@ todas las fases de diseno estan corriendo sin las restricciones de la organizaci
 ## Paso 3 — Specs validos
 
 ```
-npx @fission-ai/openspec validate --all --strict
+npx un-specweaver validate
 ```
 
 ## Paso 4 — Resumir

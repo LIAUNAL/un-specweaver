@@ -20,9 +20,9 @@ npx un-specweaver bridge --dry-run
 
 El plan de olas sale del grafo de dependencias, no del avance. Cruzalo con la realidad:
 
-- `openspec list` — que changes existen
-- `openspec/changes/<id>/tasks.md` — cuantas casillas van marcadas
-- `openspec/changes/archive/` — que ya se cerro
+- `npx un-specweaver status` — que changes existen y como van
+- `.un-specweaver/openspec/changes/<id>/tasks.md` — cuantas casillas van marcadas
+- `.un-specweaver/openspec/changes/archive/` — que ya se cerro
 
 Una ola cuyos changes ya estan archivados esta hecha, aunque el plan la siga mostrando.
 

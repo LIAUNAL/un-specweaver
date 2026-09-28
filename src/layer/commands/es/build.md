@@ -16,16 +16,16 @@ no es un error.
 
 ## Paso 0 — Verificar que el entorno de construccion esta completo
 
-`npx un-specweaver doctor`. Aqui **si** bloquean los pasos de Gentle-AI (`gentle-bin`,
-`gentle-config`): son el SDD que hace la construccion. Si estan en "falta", resuelvelos con
-`npx un-specweaver init` antes de seguir.
+`npx un-specweaver doctor`. Aqui **si** bloquean los pasos de memoria y mapa del codigo
+(`engram-bin`, `engram-project`, `graphify-bin`, `graphify`): sin ellos construis sin rationale
+y explorando a ciegas. Si estan en "falta", resuelvelos con `npx un-specweaver init`.
 
 ## Paso 1 — Verificar que se puede empezar
 
 Antes de escribir nada:
 
 1. Busca el change en `.un-specweaver/sprint-plan.md`. Si declara `depende de`, verifica que **cada**
-   dependencia este archivada (`openspec/changes/archive/`) o con su `tasks.md` completo.
+   dependencia este archivada (`.un-specweaver/openspec/changes/archive/`) o con su `tasks.md` completo.
 2. Si una dependencia no esta lista, **detente y dilo**. Construir sobre un spec que todavia
    puede cambiar es trabajo que se va a botar.
 3. Lee el change completo: `proposal.md`, `specs/**/spec.md`, `tasks.md`.
@@ -94,25 +94,24 @@ prueba que tiene que tener un test que lo ejerza. `tasks.md` es el checklist.
    migracion, cosa que atraviesa modulos — escribi `design.md` en la carpeta del change antes
    de programar. **Solo si aplica**: OpenSpec lo pide condicional, no por defecto.
 
-### Skills de Gentle-AI que ayudan aqui
+### Si el usuario ya tiene Gentle-AI
 
-Se invocan pidiendolas en lenguaje normal, sin ceremonia:
+Esta herramienta **no lo instala ni lo configura** — tocaria su configuracion global y
+chocaria con su propia instalacion. Pero si `gentle-ai` esta en el PATH de esta maquina, sus
+skills de revision existen y valen la pena ofrecerlas al cerrar (nunca imponerlas):
+`work-unit-commits`, `judgment-day`, `branch-pr` / `chained-pr`, y los subagentes
+`review-readability` / `review-reliability` / `review-resilience` / `review-risk`.
 
-- **`work-unit-commits`** — agrupa los cambios en commits revisables en vez de un mamotreto
-- **`judgment-day`** — revision adversarial con dos jueces que se contradicen
-- los subagentes **`review-readability`**, **`review-reliability`**, **`review-resilience`**,
-  **`review-risk`** — cada uno mira con un lente distinto
-- **`branch-pr`** / **`chained-pr`** — PRs con chequeo de issue; parte los de mas de 400 lineas
-
-Ofrecelas al cerrar, no las impongas.
+**Compruébalo antes de nombrarlas.** Sugerir una skill que no existe es el mismo fallo
+silencioso que invocar graphify y que no pase nada.
 
 ## Paso 4 — Cerrar
 
 1. Marca las casillas de `tasks.md` que quedaron hechas de verdad
-2. `npx @fission-ai/openspec validate --all --strict`
+2. `npx un-specweaver validate`
 3. Registra las decisiones de implementacion que no son obvias desde el codigo (ver "Memoria" abajo)
 4. **Cierra la story**: `npx un-specweaver close <change-id>`. Valida y archiva; el delta pasa a
-   `openspec/specs/` y se vuelve la linea base. **No es opcional ni "cuando este entregado"**: una
+   `.un-specweaver/openspec/specs/` y se vuelve la linea base. **No es opcional ni "cuando este entregado"**: una
    story terminada sin cerrar deja a `/sw:change` sin contra que medir. Si decides no cerrar
    (por ejemplo, la story espera revision), dilo explicitamente y por que; `doctor` lo va a
    seguir marcando hasta que se cierre
@@ -123,12 +122,15 @@ Ofrecelas al cerrar, no las impongas.
 
 ## Memoria de decisiones (Engram)
 
-Engram es **opcional**, y su memoria **siempre esta segmentada por proyecto**: `.engram/config.json`
-fija el nombre bajo el que se guarda y se busca. Lo que guardes aqui no aparece en otros
-proyectos, y lo de otros proyectos no aparece aqui, salvo que pidas explicitamente una busqueda
-cross-proyecto (`all_projects`). No lo hagas por defecto: una memoria de otro proyecto que se
-cuela como si fuera de este es una alucinacion con fuente. Si `mem_current_project` no devuelve
-`project_source: "config"`, el binding falta — corre `npx un-specweaver init` antes de guardar.
+Engram es **opcional**, y su memoria vive **dentro del proyecto**: `.un-specweaver/engram` es
+una base propia, no una etiqueta sobre una base compartida. Lo que guardes aqui no existe para
+ningun otro proyecto, y borrar `.un-specweaver/` lo borra.
+
+**Limite conocido, y el unico modo de fallo real:** si el usuario tiene el **plugin global de
+Engram** en Claude Code, sus herramientas viven en otro namespace (`mcp__plugin_engram_*`) y
+siguen escribiendo en `~/.engram`, fuera del proyecto. Ninguna configuracion de proyecto lo
+vence. Si ves dos juegos de herramientas de memoria, **usa las del proyecto y dilo**; guardar el
+rationale en la base equivocada es perderlo sin enterarte. `npx un-specweaver doctor` lo reporta.
 
 - **Si `engram` esta en PATH** → guarda ahi la decision y su razon.
 - **Si no esta** → escribela igual, en `design.md` del change bajo `## Decisions`, y **avisa

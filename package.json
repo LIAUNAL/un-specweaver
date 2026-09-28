@@ -1,6 +1,6 @@
 {
   "name": "un-specweaver",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "type": "module",
   "description": "Desarrollo dirigido por especificacion: de la idea al codigo en fases verificables, con trazabilidad de requisito a contrato a codigo.",
   "engines": {

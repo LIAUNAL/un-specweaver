@@ -532,14 +532,33 @@ Lo descubrimos duplicando 357 prompts en una base real; con `--force` se puede f
 
 ### Compartir el rationale con el equipo
 
+La base es SQLite binario y **se ignora**: dos personas guardando produce un conflicto que git no
+puede resolver. Lo que sí se comparte es el formato de sincronizacion de engram — chunks
+comprimidos + manifest — que va al repo como cualquier otro archivo.
+
+**Vos, que tenes la memoria:**
+
 ```bash
-npx un-specweaver memory share             # exporta a un formato que git si versiona
-npx un-specweaver memory share --import    # del otro lado, tras un pull
+npx un-specweaver memory share     # escribe .un-specweaver/.engram/{manifest.json,chunks/}
+git add .un-specweaver/.engram && git commit -m "memoria del proyecto" && git push
 ```
 
-La base es SQLite binario y se ignora: dos personas guardando produce un conflicto que no se
-puede resolver. `share` usa el formato de sincronizacion de engram (chunks + manifest en
-`.un-specweaver/.engram/`), que **si** va al repo. Es opt-in: por defecto la memoria es local.
+**Tu companero, despues de clonar:**
+
+```bash
+npx un-specweaver init             # deja el wrapper y su base vacia
+npx un-specweaver memory share --import
+```
+
+Y ya tiene las decisiones con su busqueda. Verificado de punta a punta: 24 observaciones, 3
+sesiones y 112 prompts viajaron por git a un clon limpio.
+
+Cada vez que quieras publicar lo nuevo, `memory share` otra vez y commitea; del otro lado,
+`--import` tras el pull. Es **opt-in**: si nadie corre `share`, la memoria se queda local.
+
+La carpeta se protege sola: `init` escribe `.un-specweaver/.gitignore` con `engram/`, `bin/`,
+`local.json` y `dashboard.html`, asi que la base no se puede commitear por accidente ni aunque
+falte el bloque del `.gitignore` de la raiz — pasó en una prueba con un `init --only`.
 
 ## El puente
 

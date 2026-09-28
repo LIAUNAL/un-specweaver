@@ -171,6 +171,7 @@ Los comandos, para tenerlos a mano:
     'step.engram.isolation': `La memoria de este proyecto vive en .un-specweaver/engram, no en ~/.engram: borrar
      la carpeta borra la memoria, y ningun otro proyecto la ve.`,
     'step.engram.wrapper': 'wrapper que fija ENGRAM_DATA_DIR a este proyecto (resuelve su propia ruta: sin rutas absolutas de una maquina)',
+    'step.engram.guard': 'la base y el wrapper se ignoran aunque el .gitignore de la raiz falte: un SQLite commiteado no se mergea',
     'step.engram.mcp': (a) => `registra el servidor de memoria de ${a} apuntando al wrapper`,
     'step.engram.pluginWarning': `AVISO: tenes el plugin global de Engram en Claude Code. Vive en otro namespace y
      ninguna config de proyecto lo vence: sus herramientas siguen escribiendo en ~/.engram.
@@ -353,6 +354,7 @@ The commands, for reference:
     'step.engram.isolation': `This project's memory lives in .un-specweaver/engram, not ~/.engram: deleting the folder
      deletes the memory, and no other project sees it.`,
     'step.engram.wrapper': 'wrapper pinning ENGRAM_DATA_DIR to this project (resolves its own path: no machine-specific absolutes)',
+    'step.engram.guard': 'the database and wrapper stay ignored even if the root .gitignore is missing: a committed SQLite cannot be merged',
     'step.engram.mcp': (a) => `registers ${a}'s memory server pointing at the wrapper`,
     'step.engram.pluginWarning': `HEADS UP: the global Engram plugin is enabled in Claude Code. It lives in another namespace
      and no project config overrides it: its tools keep writing to ~/.engram.

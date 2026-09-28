@@ -189,6 +189,15 @@ function mergeMarkedBlock(current, block, start, end) {
 
 // Wrapper que fija la memoria al proyecto. Resuelve su propia ruta: no depende del cwd desde
 // el que arranque el agente, ni lleva rutas absolutas de una maquina.
+// Lo de ESTA maquina, ignorado por la carpeta misma. Los chunks de `.engram/` no estan aqui a
+// proposito: ese es el formato con el que el equipo comparte la memoria.
+export const HOME_IGNORE = `# Generado por un-specweaver: lo de esta maquina no va al repo.
+local.json
+dashboard.html
+engram/
+bin/
+`;
+
 export const ENGRAM_WRAPPER = `#!/bin/sh
 # Generado por un-specweaver. La memoria de Engram de ESTE proyecto vive junto a este script.
 # Regenerable con \`npx un-specweaver init\`; no lo edites a mano.
@@ -414,6 +423,10 @@ export const STEPS = [
       const actions = [
         note(t(ctx.lang, 'step.engram.isolation')),
         write(P.engramBin, ENGRAM_WRAPPER, t(ctx.lang, 'step.engram.wrapper'), { mode: 0o755 }),
+        // Cinturon ademas del bloque en el .gitignore de la raiz: la carpeta protege lo suyo.
+        // Una base SQLite commiteada es un conflicto irresoluble en el primer merge, y lo vimos
+        // pasar en una prueba donde un `init --only` se salto el paso del .gitignore.
+        write(path.join(P.home, '.gitignore'), HOME_IGNORE, t(ctx.lang, 'step.engram.guard')),
       ];
 
       const relBin = `./${rel(ctx.root, P.engramBin)}`;

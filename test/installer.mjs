@@ -1060,6 +1060,12 @@ test('la memoria de Engram queda dentro del proyecto, sin rutas absolutas en el 
   assert.match(wrapper.content, /dirname -- "\$0"/, 'resuelve su propia ruta, no una absoluta');
   assert.doesNotMatch(wrapper.content, new RegExp(root), 'nada de esta maquina adentro');
 
+  // Cinturon: la carpeta protege lo suyo aunque el .gitignore de la raiz no exista.
+  const [guard] = actions.filter((a) => a.kind === 'write' && a.file.endsWith('.gitignore'));
+  assert.ok(guard && guard.file.endsWith(path.join(HOME, '.gitignore')));
+  for (const l of ['engram/', 'bin/', 'local.json', 'dashboard.html']) assert.ok(guard.content.includes(l), l);
+  assert.ok(!guard.content.includes('.engram'), 'los chunks que comparte el equipo NO se ignoran');
+
   for (const a of actions.filter((x) => x.kind === 'write')) await runAction(a, { root, lang: 'es' });
   const mcp = JSON.parse(fs.readFileSync(path.join(root, '.mcp.json'), 'utf8'));
   assert.equal(mcp.mcpServers.engram.command, `./${path.join(HOME, 'bin', 'engram')}`, 'relativa: Claude Code la resuelve contra el proyecto');

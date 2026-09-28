@@ -132,3 +132,43 @@ test('migrar un proyecto ya consolidado no propone nada', () => {
   assert.equal(migrationPlan(root).needed, false);
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+// --- memoria: traerla de la base global y compartirla -------------------------------------
+import { filterExport, likelyProjectName, memoryStatus, importFromGlobal } from '../src/memory.mjs';
+
+test('el filtro por proyecto sigue la sesion: la observacion no dice a que proyecto pertenece', () => {
+  // Forma real de `engram export` (verificada contra 1.20): las observaciones solo traen
+  // session_id, y el proyecto vive en la sesion.
+  const dump = {
+    version: '0.1.0', exported_at: 'x',
+    sessions: [{ id: 's1', project: 'mio' }, { id: 's2', project: 'otro' }],
+    observations: [{ id: 1, session_id: 's1', title: 'a' }, { id: 2, session_id: 's2', title: 'b' }],
+    prompts: [{ id: 1, session_id: 's1', project: 'mio' }, { id: 2, session_id: 's2', project: 'otro' },
+              { id: 3, session_id: 's1', project: null }],
+  };
+  const f = filterExport(dump, 'mio');
+  assert.deepEqual(f.sessions.map((s) => s.id), ['s1']);
+  assert.deepEqual(f.observations.map((o) => o.id), [1], 'la del otro proyecto no viaja');
+  assert.deepEqual(f.prompts.map((p) => p.id), [1, 3], 'por proyecto o por sesion');
+  assert.equal(f.version, '0.1.0');
+});
+
+test('el nombre del proyecto se deriva como lo hace engram: remote de git, si no la carpeta', () => {
+  const root = tmp();
+  assert.equal(likelyProjectName(root), path.basename(root).toLowerCase());
+  execFileSync('git', ['-C', root, 'init', '-q']);
+  execFileSync('git', ['-C', root, 'remote', 'add', 'origin', 'git@github.com:Acme/Mi_Repo.git']);
+  assert.equal(likelyProjectName(root), 'mi_repo');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('sin memoria aislada, importar no hace nada a medias', () => {
+  const root = tmp();
+  const st = memoryStatus(root);
+  assert.equal(st.isolated, false);
+  assert.equal(st.observations, 0);
+  const r = importFromGlobal(root, { project: 'no-existe' });
+  assert.equal(r.ok, false);
+  assert.ok(['not-isolated', 'no-engram'].includes(r.reason), r.reason);
+  fs.rmSync(root, { recursive: true, force: true });
+});

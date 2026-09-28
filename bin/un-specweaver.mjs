@@ -22,6 +22,9 @@ USO
   npx un-specweaver status [dir]   en que va el proyecto: fases, changes, sprint, requisitos, decisiones
                                    --html escribe .un-specweaver/dashboard.html · --open lo abre · --json
   npx un-specweaver validate       valida todos los specs (envuelve a OpenSpec)
+  npx un-specweaver memory         estado de la memoria del proyecto
+                                   import [proyecto]  trae la memoria de la base global
+                                   share [--import]   exporta/trae el formato que git si versiona
   npx un-specweaver migrate        muda un proyecto de 0.5.x al layout consolidado
   npx un-specweaver reset          quita TODO lo que la herramienta creo (pide confirmacion)
   npx un-specweaver vendors           muestra las versiones pineadas
@@ -76,6 +79,7 @@ function flags(argv) {
     else if (a === '--only') o.only = argv[++i].split(',').map((s) => s.trim());
     else if (a === '--skip') o.skip = argv[++i].split(',').map((s) => s.trim());
     else if (a === '--done') o.done = true;
+    else if (a === '--import') o.import = true;
     else if (a === '--html') o.html = true;
     else if (a === '--open') { o.html = true; o.open = true; }
     else if (a === '--json') o.json = true;
@@ -206,6 +210,51 @@ switch (cmd) {
     }
     console.log(renderTerminal(model, lang));
     process.exit(0);
+  }
+
+  case 'memory': {
+    const { memoryStatus, importFromGlobal, share, globalProjects, likelyProjectName } = await import('../src/memory.mjs');
+    const root = path.resolve(process.cwd());
+    const sub = o._[0];
+
+    if (!sub) {
+      const st = memoryStatus(root);
+      console.log(`\nMemoria del proyecto: ${st.dir}`);
+      console.log(`  ${st.isolated ? 'aislada' : 'SIN AISLAR — corre `npx un-specweaver init`'}${st.hasDb ? `, ${st.observations} observacion(es)` : ', vacia todavia'}`);
+      if (st.global) console.log(`\n  En la base global hay "${likelyProjectName(root)}" con ${st.global.observations} observacion(es).\n  Traerla: npx un-specweaver memory import`);
+      console.log('\n  memory import [proyecto]   trae la memoria de la base global a este proyecto');
+      console.log('  memory share               exporta la memoria a un formato que git puede versionar\n');
+      process.exit(0);
+    }
+
+    if (sub === 'import') {
+      const r = importFromGlobal(root, { project: o._[1], dryRun: !!o.dryRun, force: !!o.force });
+      if (!r.ok) {
+        if (r.reason === 'no-engram') console.error('\nengram no esta instalado. Corre `npx un-specweaver init`.\n');
+        else if (r.reason === 'not-isolated') console.error('\nEste proyecto no tiene memoria aislada todavia. Corre `npx un-specweaver init`.\n');
+        else if (r.reason === 'not-found') {
+          console.error(`\nLa base global no tiene un proyecto llamado "${r.name}".`);
+          if (r.available.length) { console.error('  Hay:'); for (const p of r.available) console.error(`    ${p.name}  (${p.observations} obs)`); console.error('\n  Elegi uno: npx un-specweaver memory import <nombre>'); }
+          console.error('');
+        } else if (r.reason === 'already-has-memory') console.error(`\nEste proyecto ya tiene ${r.observations} observacion(es) propias.\nImportar de nuevo DUPLICA los prompts (engram deduplica observaciones y sesiones, prompts no).\nSi aun asi queres, usa --force.\n`);
+        else console.error(`\nFallo: ${r.reason}\n${r.out || ''}\n`);
+        process.exit(1);
+      }
+      const c = r.counts;
+      console.log(`\n${r.dryRun ? '[dry-run] traeria' : 'Traido'} de "${r.name}": ${c.observations} observacion(es), ${c.sessions} sesion(es), ${c.prompts} prompt(s).`);
+      console.log(r.dryRun ? '' : 'La base global queda intacta.\n');
+      process.exit(0);
+    }
+
+    if (sub === 'share') {
+      const r = share(root, { importing: !!o.import });
+      if (!r.ok) { console.error(`\n${r.reason === 'not-isolated' ? 'Este proyecto no tiene memoria aislada. Corre `npx un-specweaver init`.' : r.out}\n`); process.exit(1); }
+      console.log(`\n${r.out}\n\nLos chunks quedan en ${r.dir}: eso SI se commitea (la base binaria no).\nDel otro lado: npx un-specweaver memory share --import\n`);
+      process.exit(0);
+    }
+
+    console.error(`Subcomando desconocido: ${sub}. Usa: memory | memory import [proyecto] | memory share\n`);
+    process.exit(2);
   }
 
   case 'validate': {

@@ -340,6 +340,7 @@ npx un-specweaver close [ids|--done]  # cierra stories terminadas: valida y arch
 npx un-specweaver status [dir]        # en que va: fases, changes, sprint, requisitos, decisiones
 npx un-specweaver status --open       # lo mismo como .un-specweaver/dashboard.html, en el navegador
 npx un-specweaver validate            # valida todos los specs (envuelve a OpenSpec)
+npx un-specweaver memory              # estado de la memoria; `import` la trae, `share` la comparte
 npx un-specweaver migrate             # muda un proyecto de 0.5.x al layout consolidado
 npx un-specweaver reset               # quita TODO lo que la herramienta creo
 npx un-specweaver vendors             # versiones pineadas
@@ -511,6 +512,35 @@ layout anterior y lo usa, porque actualizar no puede romper un proyecto en silen
 
 Es idempotente: volver a correrlo omite lo ya hecho.
 
+### La memoria de un proyecto que ya existia
+
+Un proyecto anterior a 0.6.0 tiene su memoria en la base global (`~/.engram`), etiquetada con
+`--project`. Traerla a la del proyecto:
+
+```bash
+npx un-specweaver memory               # que hay aqui y que hay en la global
+npx un-specweaver memory import --dry-run
+npx un-specweaver memory import        # o: memory import <nombre-del-proyecto>
+```
+
+Exporta la base global (solo lectura), **filtra por proyecto** —las observaciones no dicen a que
+proyecto pertenecen: se sigue por su sesion— e importa el resultado. La base global queda intacta.
+
+Se niega si el proyecto ya tiene memoria propia, y esto no es cautela de mas: **`engram import`
+deduplica observaciones y sesiones por id, pero no los prompts**. Importar dos veces los duplica.
+Lo descubrimos duplicando 357 prompts en una base real; con `--force` se puede forzar igual.
+
+### Compartir el rationale con el equipo
+
+```bash
+npx un-specweaver memory share             # exporta a un formato que git si versiona
+npx un-specweaver memory share --import    # del otro lado, tras un pull
+```
+
+La base es SQLite binario y se ignora: dos personas guardando produce un conflicto que no se
+puede resolver. `share` usa el formato de sincronizacion de engram (chunks + manifest en
+`.un-specweaver/.engram/`), que **si** va al repo. Es opt-in: por defecto la memoria es local.
+
 ## El puente
 
 ```bash
@@ -629,7 +659,7 @@ Una sola duena por dato:
 ## Desarrollo
 
 ```bash
-npm test                    # 148 tests
+npm test                    # 151 tests
 npm pack                    # ~23 kB
 node bin/un-specweaver.mjs init --dry-run
 ```
@@ -653,4 +683,5 @@ implementando `status()` y `plan()`; `--dry-run`, la idempotencia y `doctor` sal
 | Engram (instalacion) | **funciona** — Homebrew o `go install`, un solo item que autorizar |
 | Engram (memoria dentro del proyecto) | **funciona** — `ENGRAM_DATA_DIR` + wrapper, verificado contra engram 1.20 |
 | `reset` / `migrate` | **funciona** — probados sobre un proyecto montado y uno de 0.5.x |
+| `memory import` / `share` | **funciona** — 24 observaciones traidas de la base global a la del proyecto, sin tocar la global |
 | Gentle-AI | **fuera del montaje**: no se instala ni se configura; si esta en el PATH, sus skills se ofrecen |

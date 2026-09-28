@@ -15,23 +15,32 @@ Two mistakes sink this phase, and both are expensive:
    nobody may ever read. The baseline is scoped to what will be worked on; the rest comes in when
    it gets touched.
 
-## Step 1 — Scan
+## Step 1 — Start from the adoption brief
 
 ```
-npx un-specweaver scan
+npx un-specweaver context
 ```
 
-It returns **evidence**: languages, tests, stack, structure, documentation that already exists,
-CI, git history, and what this project is missing to work with the method. It also proposes a plan
-and lists the questions the scan **cannot** answer.
+If `adoption-brief.md` exists, **read it first and in full**: `un-specweaver adopt` generated it
+and it carries what was agreed with the user, the scan evidence, the documents the team brought
+from outside the repo (`inputs/`) and the capability candidates. It is the input that avoids
+starting from zero.
 
-Read it in full before proposing anything. If the project is already partly adopted, the plan says
-so: do not redo what is done.
+If it does **not** exist, ask for it before continuing:
 
-## Step 2 — Agree the scope (before touching a file)
+```
+npx un-specweaver adopt --input <doc-or-folder>   # repeatable
+```
 
-Ask the user **the questions the scan printed**, in that order. Do not answer them for them and
-do not assume the recommended option: they change everything that follows.
+It asks what has to be decided and leaves the brief. Meanwhile you can look at
+`npx un-specweaver scan`, which is the same evidence without the answers. If the project is
+already partly adopted, the plan says so: do not redo what is done.
+
+## Step 2 — Confirm the scope (before touching a file)
+
+If the brief already carries the answers, **confirm them in one sentence** and move on. If one is
+empty, ask it now. Do not answer them for the user and do not assume the recommended option: they
+change everything that follows.
 
 The most important one is always **scope**. On a large project the cheap answer is *"only the area
 I am about to work on"*, and then everything that follows is limited to that area. Say it out
@@ -86,8 +95,9 @@ Each difference is one of three things, and which one must be decided before mov
 ## Step 5 — Brownfield PRD, of the agreed scope
 
 `bmad-document-project` to capture what the system does today, then `bmad-prd` on top of that.
-Use the documentation the scan found and whatever the user brought from outside the repo as input:
-correcting a draft is cheaper than writing from scratch.
+Use **the brief's `inputs/`** and the documentation the scan found as input: what the team already
+wrote is worth more than anything you can deduce from the code, and correcting a draft is cheaper
+than writing from scratch.
 
 Rules:
 - the brownfield PRD describes **what exists**, not what you wish existed; new things come later

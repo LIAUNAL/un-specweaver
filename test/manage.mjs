@@ -177,6 +177,7 @@ test('sin memoria aislada, importar no hace nada a medias', () => {
 
 // --- escanear un proyecto que ya existe ----------------------------------------------------
 import { scan, scanCode, scanMethod } from '../src/scan.mjs';
+import { findPlanningArtifacts } from '../bridge/cli.mjs';
 
 test('el escaneo describe el proyecto por evidencia, no por impresiones', () => {
   const root = tmp();
@@ -256,14 +257,102 @@ test('scan no escribe nada: es una vista', () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('/sw:adopt escanea y acuerda el alcance antes de escribir, en los dos idiomas', () => {
+test('/sw:adopt no escribe nada antes de confirmar el alcance, en los dos idiomas', () => {
   for (const lang of ['es', 'en']) {
     const src = fs.readFileSync(path.join(ROOT_LAYER, 'commands', lang, 'adopt.md'), 'utf8');
-    assert.match(src, /un-specweaver scan/, `${lang}: tiene que partir del escaneo`);
-    const iScan = src.indexOf('un-specweaver scan');
-    const iAsk = src.search(lang === 'es' ? /preguntas que imprimio el escaneo/ : /questions the scan printed/);
-    const iWrite = src.search(lang === 'es' ? /bmad-document-project/ : /bmad-document-project/);
-    assert.ok(iScan < iAsk && iAsk < iWrite, `${lang}: escanear -> preguntar -> escribir`);
-    assert.match(src, lang === 'es' ? /incremental/ : /incremental/, `${lang}: la adopcion es incremental`);
+    const iScope = src.search(lang === 'es' ? /Confirmar el alcance/ : /Confirm the scope/);
+    const iWrite = src.indexOf('bmad-document-project');
+    assert.ok(iScope > 0 && iScope < iWrite, `${lang}: el alcance se acuerda antes de escribir`);
+    assert.match(src, /incremental/, `${lang}: la adopcion es incremental`);
+  }
+});
+
+
+// --- preparar la adopcion: recibir contexto y dejar el insumo ------------------------------
+import { prepareAdoption, renderBrief, capabilityCandidates, briefPath, inputsDir } from '../src/adopt.mjs';
+
+function legacyCodebase() {
+  const root = tmp();
+  execFileSync('git', ['-C', root, 'init', '-q']);
+  touch(path.join(root, 'src', 'pagos.ts'), 'export const cobrar = () => 1;\n');
+  touch(path.join(root, 'api', 'main.py'), 'x = 1\n');
+  touch(path.join(root, 'docs', 'notas.md'), '# notas\n');
+  touch(path.join(root, 'package.json'), '{"name":"sistema"}');
+  execFileSync('git', ['-C', root, 'add', '-A']);
+  execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'init']);
+  return root;
+}
+
+test('adopt recolecta lo que el equipo ya sabe y lo deja donde el agente lo va a leer', () => {
+  const root = legacyCodebase();
+  const fuera = tmp();
+  touch(path.join(fuera, 'requisitos.md'), '- el cobro se reintenta 3 veces\n');
+  touch(path.join(fuera, 'notas-jira.txt'), 'PROJ-1 ...\n');
+
+  const r = prepareAdoption(root, {
+    inputs: [fuera, path.join(fuera, 'requisitos.md')],
+    answers: { '¿Adoptamos todo?': 'solo el area de pagos' },
+  });
+  assert.equal(r.ok, true);
+  assert.equal(r.file, briefPath(root));
+
+  // Se copia, no se enlaza: un insumo que desaparece a mitad de la adopcion es peor que nada.
+  const copiados = fs.readdirSync(inputsDir(root)).sort();
+  assert.deepEqual(copiados, ['notas-jira.txt', 'requisitos.md']);
+  fs.rmSync(path.join(fuera, 'requisitos.md'));
+  assert.ok(fs.existsSync(path.join(inputsDir(root), 'requisitos.md')), 'la copia sobrevive al original');
+
+  const brief = fs.readFileSync(r.file, 'utf8');
+  assert.match(brief, /solo el area de pagos/, 'lo acordado queda escrito');
+  assert.match(brief, /inputs\/requisitos\.md/);
+  assert.match(brief, /TypeScript \(1\)/, 'la evidencia del escaneo viaja con el');
+  assert.match(brief, /no es el PRD/i, 'tiene que decir que es un insumo, no el contrato');
+
+  // El agente lo encuentra por `context`, junto con los insumos.
+  const kinds = findPlanningArtifacts(root).filter((a) => a.kind === 'adopcion').map((a) => path.basename(a.file));
+  assert.ok(kinds.includes('adoption-brief.md'));
+  assert.ok(kinds.includes('requisitos.md'));
+
+  fs.rmSync(root, { recursive: true, force: true });
+  fs.rmSync(fuera, { recursive: true, force: true });
+});
+
+test('los candidatos a capability salen de la estructura y no incluyen carpetas de andamiaje', () => {
+  const root = legacyCodebase();
+  touch(path.join(root, 'scripts', 'deploy.sh'), '#!/bin/sh\n');
+  const s = scan(root);
+  const c = capabilityCandidates(s);
+  assert.ok(c.includes('src') && c.includes('api'));
+  for (const skip of ['docs', 'scripts']) assert.ok(!c.includes(skip), `${skip} no es una capability`);
+  assert.match(renderBrief(s), /sin interpretar/, 'el brief tiene que decir que son candidatos, no verdades');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('adopt se niega en un proyecto sin codigo: ahi el camino es /sw:new', () => {
+  const root = tmp();
+  const r = prepareAdoption(root, {});
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, 'greenfield');
+  assert.ok(!fs.existsSync(briefPath(root)), 'no deja un brief que nadie va a usar');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('un proyecto vacio recibe el plan de /sw:new, no el de adopcion', () => {
+  const root = tmp();
+  const s = scan(root);
+  assert.equal(s.greenfield, true);
+  const ids = s.plan.map((p) => p.id);
+  assert.ok(ids.includes('new'), 'el camino es /sw:new');
+  for (const id of ['document', 'prd', 'baseline']) assert.ok(!ids.includes(id), `${id} es de adopcion: no aplica`);
+  assert.equal(s.questions[0].id, 'greenfield');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('/sw:adopt parte del brief y lo pide si no existe', () => {
+  for (const lang of ['es', 'en']) {
+    const src = fs.readFileSync(path.join(ROOT_LAYER, 'commands', lang, 'adopt.md'), 'utf8');
+    assert.match(src, /adoption-brief\.md/, `${lang}: tiene que leer el brief`);
+    assert.match(src, /un-specweaver adopt --input/, `${lang}: y saber como pedirlo`);
+    assert.ok(src.indexOf('adoption-brief.md') < src.indexOf('bmad-prd'), `${lang}: el brief se lee antes de escribir el PRD`);
   }
 });

@@ -60,6 +60,14 @@ export function findPlanningArtifacts(root) {
     };
     walk(d);
   }
+  // El brief de adopcion y lo que el equipo trajo de fuera del repo: es el insumo con el que
+  // /sw:adopt escribe el PRD en vez de arrancar de cero.
+  const brief = path.join(base, 'adoption-brief.md');
+  if (fs.existsSync(brief)) out.push({ kind: 'adopcion', what: 'lo acordado al adoptar, la evidencia del escaneo y los candidatos a capability', file: brief });
+  const inputs = path.join(base, 'inputs');
+  if (fs.existsSync(inputs)) for (const f of fs.readdirSync(inputs))
+    out.push({ kind: 'adopcion', what: 'documento que trajo el equipo — vale mas que lo que se deduzca del codigo', file: path.join(inputs, f) });
+
   const epics = findEpics(root);
   for (const f of epics) out.push({ kind: 'epics', what: 'stories y criterios — fuente de los changes', file: f });
   // Las decisiones tomadas al conversar. Antes se excluian a proposito y /sw:change podia

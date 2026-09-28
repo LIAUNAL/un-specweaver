@@ -14,23 +14,31 @@ Dos errores hunden esta fase, y los dos son caros:
    codigo que quiza nadie mire. La linea base se acota a lo que se va a trabajar; el resto entra
    cuando se toque.
 
-## Paso 1 — Escanear
+## Paso 1 — Partir del brief de adopcion
 
 ```
-npx un-specweaver scan
+npx un-specweaver context
 ```
 
-Te devuelve **evidencia**: lenguajes, tests, stack, estructura, documentacion que ya existe, CI,
-historia de git, y que le falta a este proyecto para trabajar con el metodo. Ademas propone un
-plan y lista las preguntas que el escaneo **no puede** responder.
+Si existe `adoption-brief.md`, **leelo primero y entero**: lo genero `un-specweaver adopt` y trae
+lo acordado con el usuario, la evidencia del escaneo, los documentos que el equipo trajo de fuera
+del repo (`inputs/`) y los candidatos a capability. Es el insumo que evita arrancar de cero.
 
-Leelo entero antes de proponer nada. Si el proyecto ya esta parcialmente adoptado, el plan lo
-dice: no rehagas lo que ya esta.
+Si **no** existe, pediselo antes de seguir:
 
-## Paso 2 — Acordar el alcance (antes de tocar un archivo)
+```
+npx un-specweaver adopt --input <doc-o-carpeta>   # repetible
+```
 
-Hazle al usuario **las preguntas que imprimio el escaneo**, en ese orden. No las contestes por el
-ni asumas la opcion recomendada: cambian todo lo que sigue.
+Te pregunta lo que hay que decidir y deja el brief. Mientras tanto podes mirar `npx un-specweaver scan`,
+que es la misma evidencia sin las respuestas. Si el proyecto ya esta parcialmente adoptado, el
+plan lo dice: no rehagas lo que ya esta.
+
+## Paso 2 — Confirmar el alcance (antes de tocar un archivo)
+
+Si el brief ya trae las respuestas, **confirmalas en una frase** y seguí. Si alguna quedo vacia,
+preguntala ahora. No las contestes por el usuario ni asumas la opcion recomendada: cambian todo
+lo que sigue.
 
 La mas importante siempre es el **alcance**. Si el proyecto es grande, la respuesta barata es
 *"solo el area donde voy a trabajar"*, y entonces todo lo que sigue se limita a esa area. Dilo
@@ -85,8 +93,9 @@ Cada diferencia es una de tres cosas, y hay que decidir cual antes de seguir:
 ## Paso 5 — PRD brownfield, del alcance acordado
 
 `bmad-document-project` para levantar lo que el sistema hace hoy, y luego `bmad-prd` sobre eso.
-Usa como insumo la documentacion que el escaneo encontro y lo que el usuario haya traido de
-fuera del repo: es mas barato corregir un borrador que escribir desde cero.
+Usa como insumo **`inputs/` del brief** y la documentacion que el escaneo encontro: lo que el
+equipo ya escribio vale mas que lo que vos puedas deducir del codigo, y es mas barato corregir un
+borrador que escribir desde cero.
 
 Reglas:
 - el PRD brownfield describe **lo que existe**, no lo que quisieras que existiera; lo nuevo entra

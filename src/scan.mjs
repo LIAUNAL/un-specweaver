@@ -142,11 +142,17 @@ export function scan(root) {
   const history = scanHistory(root);
   const method = scanMethod(root);
   const docs = scanDocs(root);
+  // Sin codigo no hay nada que documentar: el camino es /sw:new, no el de adopcion. Proponer
+  // "levanta lo que el sistema hace hoy" sobre una carpeta vacia es mandar a nadie a ningun lado.
+  // Sin codigo PERO con el metodo ya montado o con artefactos, no es un proyecto nuevo: es uno
+  // a medio adoptar (o uno de 0.5.x sin codigo propio), y merece su plan, no el de arranque.
+  const greenfield = code.files === 0 && !method.installed && !method.legacyLayout && !method.trace && !method.epics;
+  const ctx = { code, docs, history, method, greenfield };
   return {
-    root, name: path.basename(root),
+    root, name: path.basename(root), greenfield,
     code, stack: scanStack(root), docs, ci: scanCi(root), history, method,
-    plan: plan({ code, docs, history, method }),
-    questions: questions({ code, docs, history, method }),
+    plan: plan(ctx),
+    questions: questions(ctx),
   };
 }
 
@@ -154,12 +160,23 @@ export function scan(root) {
 // Ordenado por dependencia real, no por gusto: sin mapa no hay arquitectura derivada, sin PRD
 // no hay stories, sin stories no hay specs. Cada paso dice que comando lo hace.
 
-function plan({ code, docs, history, method }) {
+function plan({ code, docs, history, method, greenfield }) {
   const steps = [];
   const add = (id, title, why, cmd, done) => steps.push({ id, title, why, cmd, done: !!done });
 
   add('install', 'Montar la herramienta', 'instala BMAD, OpenSpec, Engram y graphify, y deja los comandos /sw:*',
       'npx un-specweaver init', method.installed);
+  if (greenfield) {
+    add('arch-base', 'Llenar docs/architecture-base.md', 'son las restricciones de la organizacion; sin ellas el agente asume defaults propios',
+        'editalo a mano (lo escribe init)', method.architectureBase === 'llena');
+    add('new', 'Levantar la idea: brief, PRD, arquitectura, UX, epics', 'no hay codigo que documentar: esto arranca conversando',
+        '/sw:new', method.epics);
+    add('bridge', 'Traducir stories a contratos', 'deterministico: mismo epics.md, mismos specs',
+        'npx un-specweaver bridge --strict', method.trace);
+    add('build', 'Construir la primera historia', 'contra su contrato, y cerrarla para fijar la linea base',
+        '/sw:build <change-id>', method.capabilities.length > 0);
+    return steps;
+  }
   if (method.legacyLayout) add('migrate', 'Mudar al layout consolidado', 'este proyecto tiene openspec/ y _bmad-output/ en la raiz',
       'npx un-specweaver migrate', false);
   add('map', 'Mapear el codigo real', `${code.files} archivo(s) de codigo: el grafo dice que hay, no que crees que hay`,
@@ -182,8 +199,14 @@ function plan({ code, docs, history, method }) {
 }
 
 // Lo que el escaneo NO puede deducir y cambia el plan. Se preguntan una vez, al principio.
-function questions({ code, docs, history, method }) {
+function questions({ code, docs, history, method, greenfield }) {
   const q = [];
+  if (greenfield) return [{
+    id: 'greenfield',
+    q: 'Este proyecto no tiene codigo todavia. ¿Arrancamos la idea desde cero?',
+    why: 'El camino de un proyecto nuevo es /sw:new: brief, PRD, arquitectura, UX y epics conversando. La adopcion (escanear y documentar lo que existe) no aplica aqui.',
+    options: ['si, /sw:new', 'el codigo esta en otra carpeta'],
+  }];
   const big = code.files > 300;
   q.push({
     id: 'scope',

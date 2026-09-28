@@ -23,6 +23,8 @@ USO
                                    --html escribe .un-specweaver/dashboard.html · --open lo abre · --json
   npx un-specweaver validate       valida todos los specs (envuelve a OpenSpec)
   npx un-specweaver scan [dir]     escanea un proyecto que ya existe y propone como adoptarlo
+  npx un-specweaver adopt          prepara la adopcion: pregunta, recibe tus documentos
+                                   (--input <archivo|carpeta>, repetible) y deja el brief listo
   npx un-specweaver memory         estado de la memoria del proyecto
                                    import [proyecto]  trae la memoria de la base global
                                    share [--import]   exporta/trae el formato que git si versiona
@@ -81,6 +83,7 @@ function flags(argv) {
     else if (a === '--skip') o.skip = argv[++i].split(',').map((s) => s.trim());
     else if (a === '--done') o.done = true;
     else if (a === '--import') o.import = true;
+    else if (a === '--input') (o.input = o.input || []).push(argv[++i]);
     else if (a === '--html') o.html = true;
     else if (a === '--open') { o.html = true; o.open = true; }
     else if (a === '--json') o.json = true;
@@ -210,6 +213,46 @@ switch (cmd) {
       process.exit(0);
     }
     console.log(renderTerminal(model, lang));
+    process.exit(0);
+  }
+
+  case 'adopt': {
+    // Lo deterministico de adoptar: recolectar lo que el equipo ya sabe y dejar por escrito lo
+    // acordado. El PRD lo escribe el agente con esto como insumo.
+    const { prepareAdoption, briefPath } = await import('../src/adopt.mjs');
+    const readline = await import('node:readline/promises');
+    const root = path.resolve(o._[0] || process.cwd());
+
+    const dry = prepareAdoption(root, { inputs: o.input || [], dryRun: true });
+    if (!dry.ok && dry.reason === 'greenfield') {
+      console.log('\nEste proyecto no tiene codigo todavia: el camino es /sw:new, no la adopcion.');
+      console.log('Si el codigo esta en otra carpeta, corre esto ahi.\n');
+      process.exit(0);
+    }
+    const s = dry.scan;
+
+    console.log(`\n${s.name} — ${s.code.files} archivo(s) de codigo, ${s.docs.length} documento(s), ${s.history ? `${s.history.commits} commits` : 'sin git'}\n`);
+
+    const answers = {};
+    if (process.stdin.isTTY && !o.yes) {
+      console.log('Tres o cuatro preguntas. Enter deja una sin responder y la decidis con el agente.\n');
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      for (const q of s.questions) {
+        console.log(`  ${q.q}`);
+        console.log(`  ${q.why}`);
+        if (q.options.length) console.log(`  (${q.options.join('  |  ')})`);
+        answers[q.q] = (await rl.question('  > ')).trim();
+        console.log('');
+      }
+      rl.close();
+    } else {
+      console.log('Sin terminal interactiva: el brief queda con las preguntas sin responder.\n');
+    }
+
+    const r = prepareAdoption(root, { inputs: o.input || [], answers });
+    console.log(`Brief de adopcion: ${r.rel}`);
+    for (const i of r.inputs) console.log(i.error ? `  ! ${i.from} — ${i.error}` : `  + ${i.to}`);
+    console.log('\nAbri tu agente en esta carpeta y corre /sw:adopt: lee ese brief y ejecuta el plan.\n');
     process.exit(0);
   }
 

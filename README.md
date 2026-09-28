@@ -340,6 +340,7 @@ npx un-specweaver close [ids|--done]  # cierra stories terminadas: valida y arch
 npx un-specweaver status [dir]        # en que va: fases, changes, sprint, requisitos, decisiones
 npx un-specweaver status --open       # lo mismo como .un-specweaver/dashboard.html, en el navegador
 npx un-specweaver scan [dir]          # escanea un proyecto que ya existe y propone como adoptarlo
+npx un-specweaver adopt [--input X]   # prepara la adopcion: pregunta, recibe tus documentos y deja el brief
 npx un-specweaver validate            # valida todos los specs (envuelve a OpenSpec)
 npx un-specweaver memory              # estado de la memoria; `import` la trae, `share` la comparte
 npx un-specweaver migrate             # muda un proyecto de 0.5.x al layout consolidado
@@ -516,32 +517,48 @@ Es idempotente: volver a correrlo omite lo ya hecho.
 ### Adoptar un proyecto que ya existe
 
 ```bash
-npx un-specweaver init     # el montaje, igual que en uno nuevo
-npx un-specweaver scan     # que hay, que falta, que plan y que preguntas
-/sw:adopt                  # en tu agente: lee el escaneo, pregunta y ejecuta
+npx un-specweaver init                              # el montaje, igual que en uno nuevo
+npx un-specweaver adopt --input docs/requisitos.md  # pregunta, recibe tu contexto, deja el brief
+/sw:adopt                                           # en tu agente: lee el brief y ejecuta
 ```
 
-`scan` no adivina: lee el repo y reporta **evidencia** — lenguajes y cuantos archivos, si hay
-tests, el stack por sus manifiestos, la estructura de primer nivel, la documentacion que ya existe
-(distinguiendo ADRs), CI, e historia de git (commits, autores, si hay actividad reciente). Despues
-dice **que le falta** a ese proyecto para el metodo y propone un plan donde cada paso lleva el
-comando que lo hace y **los que ya estan hechos salen marcados**: adoptar dos veces no rehace nada.
+**`scan`** es la evidencia: lenguajes y cuantos archivos, si hay tests, el stack por sus
+manifiestos, la estructura de primer nivel, la documentacion que ya existe (distinguiendo ADRs),
+CI e historia de git. Con eso dice **que le falta** al proyecto y propone un plan donde cada paso
+lleva su comando y **los ya hechos salen marcados**: adoptar dos veces no rehace nada. No escribe
+nada.
 
-Y termina con lo que el escaneo **no puede** saber, que es lo que de verdad cambia el trabajo:
+**`adopt`** es el que te engancha al flujo. Hace tres cosas que `scan` no puede:
+
+1. **Te hace las preguntas** que nadie mas puede contestar, y guarda las respuestas.
+2. **Recibe lo que ya sabes** con `--input <archivo|carpeta>` (repetible): un doc de requisitos,
+   notas, un export de Jira, el README tecnico. Lo **copia** a `inputs/` dentro de la carpeta de
+   planeacion — copiar y no enlazar es a proposito: un insumo que desaparece a mitad de la
+   adopcion es peor que no tenerlo.
+3. **Deja el brief de adopcion** (`adoption-brief.md`): lo acordado, la evidencia del escaneo, los
+   insumos, los **candidatos a capability** derivados de la estructura (sin interpretar: un
+   directorio no es una capability hasta que alguien lo dice) y lo que falta.
+
+Ese brief es el insumo con el que `/sw:adopt` escribe el PRD brownfield en vez de arrancar de
+cero, y `un-specweaver context` lo lista junto a los `inputs/` para que el agente los cargue.
+
+La pregunta que decide todo es la primera:
 
 > **¿Adoptamos el sistema entero o solo el area donde vas a trabajar?**
 > Son 2.400 archivos. Especificar todo antes de tocar nada son semanas de escribir contratos de
-> codigo que quiza nadie mire. Lo barato es una linea base **acotada**: el area donde vas a
-> trabajar, y el resto entra cuando se toque.
+> codigo que quiza nadie mire. Lo barato es una linea base **acotada**.
 
-Esa es la decision que hunde una adopcion si se toma por defecto, y por eso `/sw:adopt` **se
-detiene** hasta que la respondas. Adoptar es incremental: lo que no se especifica hoy no queda
-prohibido, queda pendiente de la story que lo toque. Ampliar el alcance despues es volver a correr
-`/sw:adopt` sobre otra area.
+Por eso `/sw:adopt` **se detiene** hasta tenerla respondida. Adoptar es incremental: lo que no se
+especifica hoy no queda prohibido, queda pendiente de la story que lo toque, y ampliar el alcance
+es volver a correr `/sw:adopt` sobre otra area.
 
-Para el codigo que ya funciona, las stories que salen describen comportamiento existente: se
-cierran con `close` y pasan a ser la linea base contra la que `/sw:change` mide todo lo que llegue
-despues. No se vuelve a construir lo que ya existe.
+Para el codigo que ya funciona, las stories describen comportamiento existente: se cierran con
+`close` y pasan a ser la linea base contra la que `/sw:change` mide todo lo que llegue despues. No
+se vuelve a construir lo que ya existe.
+
+**Si el proyecto esta vacio**, `scan` y `adopt` lo detectan y te mandan a `/sw:new`: no hay nada
+que documentar, y proponer "levanta lo que el sistema hace hoy" sobre una carpeta vacia seria
+mandarte a ningun lado.
 
 ### La memoria de un proyecto que ya existia
 
@@ -709,7 +726,7 @@ Una sola duena por dato:
 ## Desarrollo
 
 ```bash
-npm test                    # 157 tests
+npm test                    # 162 tests
 npm pack                    # ~23 kB
 node bin/un-specweaver.mjs init --dry-run
 ```
@@ -733,6 +750,6 @@ implementando `status()` y `plan()`; `--dry-run`, la idempotencia y `doctor` sal
 | Engram (instalacion) | **funciona** — Homebrew o `go install`, un solo item que autorizar |
 | Engram (memoria dentro del proyecto) | **funciona** — `ENGRAM_DATA_DIR` + wrapper, verificado contra engram 1.20 |
 | `reset` / `migrate` | **funciona** — probados sobre un proyecto montado y uno de 0.5.x |
-| `scan` + `/sw:adopt` | **funciona** — evidencia, plan con pasos ya hechos marcados y preguntas de alcance; probado sobre dos proyectos reales |
+| `scan` + `adopt` + `/sw:adopt` | **funciona** — evidencia, plan, preguntas, insumos del equipo y brief; probado sobre proyectos real, simulado y vacio |
 | `memory import` / `share` | **funciona** — 24 observaciones traidas de la base global a la del proyecto, sin tocar la global |
 | Gentle-AI | **fuera del montaje**: no se instala ni se configura; si esta en el PATH, sus skills se ofrecen |

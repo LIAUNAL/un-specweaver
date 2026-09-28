@@ -1,17 +1,47 @@
 ---
 name: adopt
-title: "UB: Adopt existing project"
-description: "Bring an existing project into this flow: map the real code, derive its architecture, raise a brownfield PRD and set a spec baseline."
-allowed-tools: Bash(npx:*), Bash(git:*), Read, Write, Edit, Glob, Grep
+title: "UB: Adopt an existing project"
+description: "Brings an existing project into this flow: scans what is there, agrees the scope with the user, maps the real code, raises a brownfield PRD and fixes a scoped spec baseline."
+allowed-tools: Bash(npx:*), Bash(git:*), Bash(graphify:*), Read, Write, Edit, Glob, Grep
 ---
 
-# /sw:adopt — existing project
+# /sw:adopt — an existing project
 
-The classic mistake is planning against what you **think** the code does. Map it first.
+Two mistakes sink this phase, and both are expensive:
 
-## Phase 1 — Map what actually exists
+1. **Planning against what you THINK the code does.** That is why it is scanned and mapped before
+   anything gets written.
+2. **Trying to specify the whole system before touching it.** Weeks writing contracts for code
+   nobody may ever read. The baseline is scoped to what will be worked on; the rest comes in when
+   it gets touched.
 
-The classic mistake in this phase is planning against what you think the code does.
+## Step 1 — Scan
+
+```
+npx un-specweaver scan
+```
+
+It returns **evidence**: languages, tests, stack, structure, documentation that already exists,
+CI, git history, and what this project is missing to work with the method. It also proposes a plan
+and lists the questions the scan **cannot** answer.
+
+Read it in full before proposing anything. If the project is already partly adopted, the plan says
+so: do not redo what is done.
+
+## Step 2 — Agree the scope (before touching a file)
+
+Ask the user **the questions the scan printed**, in that order. Do not answer them for them and
+do not assume the recommended option: they change everything that follows.
+
+The most important one is always **scope**. On a large project the cheap answer is *"only the area
+I am about to work on"*, and then everything that follows is limited to that area. Say it out
+loud: **adopting is incremental**, not a big bang. What is not specified today is not forbidden,
+it is pending the story that touches it.
+
+Close this step by summarizing in one sentence what will be adopted and what will not. If the user
+does not answer, do not continue: without an agreed scope, the rest is work without a destination.
+
+## Step 3 — Map what actually exists
 
 ## Code map (graphify)
 
@@ -40,34 +70,54 @@ those layers have another owner and duplicating them in the graph is how they st
 diagnosis. There it is worth running `/graphify <folder-of-those-docs>` **once, asking first** (it
 uses an LLM and tokens), and lifting that folder from `.graphifyignore` only while adoption lasts.
 
-## Phase 2 — Real architecture vs declared architecture
+## Step 4 — Real architecture vs declared architecture
 
 1. Derive the **real** architecture from the graph: layers, boundaries, dependencies, where the
    domain lives.
-2. Contrast it against `docs/architecture-base.md`.
-3. **Write the differences down explicitly.** Do not silence them or mentally "fix" them.
+2. Contrast it against `docs/architecture-base.md`. If the scan said it is still the **unfilled
+   template**, fill it now with the user: an agent reading an empty template treats it as doctrine.
+3. **Write the differences down explicitly.** Do not silence them or "fix" them mentally.
 
-Each difference is one of three things, and you must decide which before moving on:
-- known technical debt → document it and leave it
-- the baseline is stale → update `docs/architecture-base.md`
-- a real violation → turn it into a remediation epic
+Each difference is one of three things, and which one must be decided before moving on:
+- known technical debt → documented and left alone
+- the base is out of date → update `docs/architecture-base.md`
+- a real violation → becomes a remediation epic
 
-## Phase 3 — Brownfield PRD
+## Step 5 — Brownfield PRD, of the agreed scope
 
 `bmad-document-project` to capture what the system does today, then `bmad-prd` on top of that.
+Use the documentation the scan found and whatever the user brought from outside the repo as input:
+correcting a draft is cheaper than writing from scratch.
 
-Rule: the brownfield PRD describes **what exists**, not what you wish existed. New behavior
-comes later through `/sw:change`.
+Rules:
+- the brownfield PRD describes **what exists**, not what you wish existed; new things come later
+  through `/sw:change`
+- **only the scope agreed in Step 2.** If something outside shows up, note it as pending, do not
+  pull it in
 
-## Phase 4 — Spec baseline
+## Step 6 — Spec baseline
 
-For each capability that already works, write its spec in `openspec/specs/<capability>/spec.md`
-with `## Purpose` and its `### Requirement:` entries in present tense. This baseline is what
-`/sw:change` measures scope against; without it, scope control has nothing to compare to.
+Epics and stories for the scope (`bmad-create-epics-and-stories`), then the bridge:
 
-Verify: `npx un-specweaver validate`
+```
+npx un-specweaver bridge --strict
+npx un-specweaver validate
+```
 
-## Phase 5 — From here on
+For code that **already works**, the resulting changes describe existing behavior: closing them
+with `npx un-specweaver close --done` moves them into `.un-specweaver/openspec/specs/` and they
+become the baseline. That baseline is what `/sw:change` measures the scope of everything that
+comes later against; without it, scope control has nothing to compare to.
 
-The project is in the flow. New behavior enters through `/sw:change`, tickets through
-`/sw:ticket`, and new epics via `bmad-create-epics-and-stories` + `npx un-specweaver bridge`.
+If a story describes behavior that is already implemented and verified, tick its tasks and close
+it: do not rebuild what already exists. Say so out loud when you do.
+
+## Step 7 — Confirm and carry on
+
+```
+npx un-specweaver status --open
+```
+
+Show the user what was adopted, what was deliberately left out of scope, and what comes next.
+From here on: new things through `/sw:change`, defects through `/sw:bug`, tickets through
+`/sw:ticket`, and widening the scope means running this command again on another area.

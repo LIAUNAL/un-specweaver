@@ -339,6 +339,7 @@ npx un-specweaver history [FR-21]     # historia de un requisito, o ranking de l
 npx un-specweaver close [ids|--done]  # cierra stories terminadas: valida y archiva su spec
 npx un-specweaver status [dir]        # en que va: fases, changes, sprint, requisitos, decisiones
 npx un-specweaver status --open       # lo mismo como .un-specweaver/dashboard.html, en el navegador
+npx un-specweaver scan [dir]          # escanea un proyecto que ya existe y propone como adoptarlo
 npx un-specweaver validate            # valida todos los specs (envuelve a OpenSpec)
 npx un-specweaver memory              # estado de la memoria; `import` la trae, `share` la comparte
 npx un-specweaver migrate             # muda un proyecto de 0.5.x al layout consolidado
@@ -512,6 +513,36 @@ layout anterior y lo usa, porque actualizar no puede romper un proyecto en silen
 
 Es idempotente: volver a correrlo omite lo ya hecho.
 
+### Adoptar un proyecto que ya existe
+
+```bash
+npx un-specweaver init     # el montaje, igual que en uno nuevo
+npx un-specweaver scan     # que hay, que falta, que plan y que preguntas
+/sw:adopt                  # en tu agente: lee el escaneo, pregunta y ejecuta
+```
+
+`scan` no adivina: lee el repo y reporta **evidencia** — lenguajes y cuantos archivos, si hay
+tests, el stack por sus manifiestos, la estructura de primer nivel, la documentacion que ya existe
+(distinguiendo ADRs), CI, e historia de git (commits, autores, si hay actividad reciente). Despues
+dice **que le falta** a ese proyecto para el metodo y propone un plan donde cada paso lleva el
+comando que lo hace y **los que ya estan hechos salen marcados**: adoptar dos veces no rehace nada.
+
+Y termina con lo que el escaneo **no puede** saber, que es lo que de verdad cambia el trabajo:
+
+> **¿Adoptamos el sistema entero o solo el area donde vas a trabajar?**
+> Son 2.400 archivos. Especificar todo antes de tocar nada son semanas de escribir contratos de
+> codigo que quiza nadie mire. Lo barato es una linea base **acotada**: el area donde vas a
+> trabajar, y el resto entra cuando se toque.
+
+Esa es la decision que hunde una adopcion si se toma por defecto, y por eso `/sw:adopt` **se
+detiene** hasta que la respondas. Adoptar es incremental: lo que no se especifica hoy no queda
+prohibido, queda pendiente de la story que lo toque. Ampliar el alcance despues es volver a correr
+`/sw:adopt` sobre otra area.
+
+Para el codigo que ya funciona, las stories que salen describen comportamiento existente: se
+cierran con `close` y pasan a ser la linea base contra la que `/sw:change` mide todo lo que llegue
+despues. No se vuelve a construir lo que ya existe.
+
 ### La memoria de un proyecto que ya existia
 
 Un proyecto anterior a 0.6.0 tiene su memoria en la base global (`~/.engram`), etiquetada con
@@ -678,7 +709,7 @@ Una sola duena por dato:
 ## Desarrollo
 
 ```bash
-npm test                    # 151 tests
+npm test                    # 157 tests
 npm pack                    # ~23 kB
 node bin/un-specweaver.mjs init --dry-run
 ```
@@ -702,5 +733,6 @@ implementando `status()` y `plan()`; `--dry-run`, la idempotencia y `doctor` sal
 | Engram (instalacion) | **funciona** — Homebrew o `go install`, un solo item que autorizar |
 | Engram (memoria dentro del proyecto) | **funciona** — `ENGRAM_DATA_DIR` + wrapper, verificado contra engram 1.20 |
 | `reset` / `migrate` | **funciona** — probados sobre un proyecto montado y uno de 0.5.x |
+| `scan` + `/sw:adopt` | **funciona** — evidencia, plan con pasos ya hechos marcados y preguntas de alcance; probado sobre dos proyectos reales |
 | `memory import` / `share` | **funciona** — 24 observaciones traidas de la base global a la del proyecto, sin tocar la global |
 | Gentle-AI | **fuera del montaje**: no se instala ni se configura; si esta en el PATH, sus skills se ofrecen |

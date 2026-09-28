@@ -8,6 +8,8 @@ import { removable, cleanups, reset, migrationPlan, migrate } from '../src/manag
 import { paths, HOME } from '../src/paths.mjs';
 import { gitignoreBlock, DASHBOARD_HOOK } from '../src/steps.mjs';
 
+const ROOT_LAYER = path.join(path.resolve(import.meta.dirname, '..'), 'src', 'layer');
+
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'mg-'));
 const touch = (f, c = 'x') => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, c); };
 
@@ -171,4 +173,97 @@ test('sin memoria aislada, importar no hace nada a medias', () => {
   assert.equal(r.ok, false);
   assert.ok(['not-isolated', 'no-engram'].includes(r.reason), r.reason);
   fs.rmSync(root, { recursive: true, force: true });
+});
+
+// --- escanear un proyecto que ya existe ----------------------------------------------------
+import { scan, scanCode, scanMethod } from '../src/scan.mjs';
+
+test('el escaneo describe el proyecto por evidencia, no por impresiones', () => {
+  const root = tmp();
+  execFileSync('git', ['-C', root, 'init', '-q']);
+  touch(path.join(root, 'src', 'app.ts'), 'export const a = 1;\n');
+  touch(path.join(root, 'src', 'lib.ts'), 'export const b = 2;\n');
+  touch(path.join(root, 'test', 'app.test.ts'), 'test();\n');
+  touch(path.join(root, 'api', 'main.py'), 'x = 1\n');
+  touch(path.join(root, 'package.json'), '{"name":"demo","scripts":{"test":"x"},"dependencies":{"a":"1"}}');
+  touch(path.join(root, 'README.md'), '# demo\n');
+  touch(path.join(root, 'docs', 'adr', '001-elegimos-x.md'), '# ADR\n');
+  touch(path.join(root, '.github', 'workflows', 'ci.yml'), 'on: push\n');
+  // Ruido que no debe contarse como codigo del proyecto.
+  touch(path.join(root, 'node_modules', 'dep', 'index.js'), 'x');
+  touch(path.join(root, 'dist', 'bundle.js'), 'x');
+
+  const s = scan(root);
+  assert.equal(s.code.files, 4, 'node_modules y dist no cuentan');
+  assert.deepEqual(s.code.languages.map((l) => l.name).sort(), ['Python', 'TypeScript']);
+  assert.equal(s.code.tests, 1);
+  assert.deepEqual(s.code.topDirs, ['api', 'docs', 'src', 'test']);
+  assert.ok(s.docs.some((d) => d.kind === 'adr'), 'los ADR se distinguen de la documentacion suelta');
+  assert.ok(s.docs.some((d) => d.kind === 'readme'));
+  assert.deepEqual(s.ci, ['.github/workflows/ci.yml']);
+  assert.equal(s.stack[0].manifest, 'package.json');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('el plan no repite lo que ya esta hecho y el primer paso siempre es montar la herramienta', () => {
+  const root = tmp();
+  touch(path.join(root, 'src', 'a.js'), 'x');
+  let s = scan(root);
+  assert.equal(s.plan[0].id, 'install');
+  assert.equal(s.plan[0].done, false);
+  assert.ok(s.plan.every((p) => p.cmd), 'cada paso dice con que comando se hace');
+
+  // Proyecto ya montado y con linea base: esos pasos salen marcados.
+  touch(path.join(root, HOME, 'config.json'), '{}');
+  touch(path.join(root, HOME, 'openspec', 'specs', 'cap', 'spec.md'), '# spec');
+  s = scan(root);
+  assert.equal(s.plan.find((p) => p.id === 'install').done, true);
+  assert.equal(s.plan.find((p) => p.id === 'baseline').done, true);
+  assert.deepEqual(scanMethod(root).capabilities, ['cap']);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('el layout viejo aparece en el plan como paso de migracion', () => {
+  const root = tmp();
+  touch(path.join(root, 'openspec', 'changes', '.keep'));
+  const ids = scan(root).plan.map((p) => p.id);
+  assert.ok(ids.includes('migrate'), 'un proyecto de 0.5.x tiene que ver el paso');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('las preguntas dependen del proyecto: en uno grande la primera es acotar el alcance', () => {
+  const root = tmp();
+  for (let i = 0; i < 350; i++) touch(path.join(root, 'src', `m${i}.ts`), 'export const x = 1;\n');
+  const s = scan(root);
+  const scope = s.questions.find((q) => q.id === 'scope');
+  assert.equal(s.questions[0].id, 'scope', 'el alcance se decide primero');
+  assert.match(scope.why, /semanas/i, 'tiene que decir por que especificar todo sale caro');
+  assert.ok(scope.options[0].includes('recomendado'));
+  assert.ok(s.questions.some((q) => q.id === 'tests'), 'sin tests, se pregunta');
+
+  // La plantilla de arquitectura sin llenar no cuenta como llena.
+  touch(path.join(root, 'docs', 'architecture-base.md'), '# Base\n\n[completar]\n');
+  assert.equal(scanMethod(root).architectureBase, 'plantilla');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('scan no escribe nada: es una vista', () => {
+  const root = tmp();
+  touch(path.join(root, 'src', 'a.js'), 'x');
+  const before = fs.readdirSync(root).sort();
+  scan(root);
+  assert.deepEqual(fs.readdirSync(root).sort(), before);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('/sw:adopt escanea y acuerda el alcance antes de escribir, en los dos idiomas', () => {
+  for (const lang of ['es', 'en']) {
+    const src = fs.readFileSync(path.join(ROOT_LAYER, 'commands', lang, 'adopt.md'), 'utf8');
+    assert.match(src, /un-specweaver scan/, `${lang}: tiene que partir del escaneo`);
+    const iScan = src.indexOf('un-specweaver scan');
+    const iAsk = src.search(lang === 'es' ? /preguntas que imprimio el escaneo/ : /questions the scan printed/);
+    const iWrite = src.search(lang === 'es' ? /bmad-document-project/ : /bmad-document-project/);
+    assert.ok(iScan < iAsk && iAsk < iWrite, `${lang}: escanear -> preguntar -> escribir`);
+    assert.match(src, lang === 'es' ? /incremental/ : /incremental/, `${lang}: la adopcion es incremental`);
+  }
 });

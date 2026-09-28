@@ -1,17 +1,46 @@
 ---
 name: adopt
 title: "UB: Adoptar proyecto existente"
-description: "Trae un proyecto que ya existe a este flujo: mapea el codigo real, deriva su arquitectura, levanta un PRD brownfield y fija una linea base de specs."
-allowed-tools: Bash(npx:*), Bash(git:*), Read, Write, Edit, Glob, Grep
+description: "Trae un proyecto que ya existe a este flujo: escanea lo que hay, acuerda el alcance con el usuario, mapea el codigo real, levanta un PRD brownfield y fija una linea base de specs acotada."
+allowed-tools: Bash(npx:*), Bash(git:*), Bash(graphify:*), Read, Write, Edit, Glob, Grep
 ---
 
-# /sw:adopt — proyecto existente
+# /sw:adopt — proyecto que ya existe
 
-El error tipico es planear sobre lo que **crees** que hace el codigo. Aqui se mapea primero.
+Dos errores hunden esta fase, y los dos son caros:
 
-## Fase 1 — Mapear lo que existe de verdad
+1. **Planear sobre lo que crees que hace el codigo.** Por eso se escanea y se mapea antes de escribir nada.
+2. **Querer especificar el sistema entero antes de tocarlo.** Semanas escribiendo contratos de
+   codigo que quiza nadie mire. La linea base se acota a lo que se va a trabajar; el resto entra
+   cuando se toque.
 
-El error tipico de esta fase es planear contra lo que crees que hace el codigo.
+## Paso 1 — Escanear
+
+```
+npx un-specweaver scan
+```
+
+Te devuelve **evidencia**: lenguajes, tests, stack, estructura, documentacion que ya existe, CI,
+historia de git, y que le falta a este proyecto para trabajar con el metodo. Ademas propone un
+plan y lista las preguntas que el escaneo **no puede** responder.
+
+Leelo entero antes de proponer nada. Si el proyecto ya esta parcialmente adoptado, el plan lo
+dice: no rehagas lo que ya esta.
+
+## Paso 2 — Acordar el alcance (antes de tocar un archivo)
+
+Hazle al usuario **las preguntas que imprimio el escaneo**, en ese orden. No las contestes por el
+ni asumas la opcion recomendada: cambian todo lo que sigue.
+
+La mas importante siempre es el **alcance**. Si el proyecto es grande, la respuesta barata es
+*"solo el area donde voy a trabajar"*, y entonces todo lo que sigue se limita a esa area. Dilo
+explicitamente: **adoptar es incremental**, no un big bang. Lo que no se especifica hoy no queda
+prohibido, queda pendiente de la story que lo toque.
+
+Cierra este paso resumiendo en una frase que se va a adoptar y que no. Si el usuario no responde,
+no sigas: sin alcance acordado, el resto es trabajo sin destino.
+
+## Paso 3 — Mapear lo que existe de verdad
 
 ## Mapa del codigo (graphify)
 
@@ -40,10 +69,12 @@ arquitectura, ADRs viejos, wikis), contrastarlos contra el codigo es justamente 
 esta fase. Ahi vale correr `/graphify <carpeta-de-esos-docs>` **una vez, preguntando primero**
 (usa LLM y tokens), y quitar esa carpeta de `.graphifyignore` solo mientras dure la adopcion.
 
-## Fase 2 — Arquitectura real vs arquitectura declarada
+## Paso 4 — Arquitectura real vs arquitectura declarada
 
 1. Deriva del grafo la arquitectura **real**: capas, fronteras, dependencias, donde vive el dominio.
-2. Contrastala contra `docs/architecture-base.md`.
+2. Contrastala contra `docs/architecture-base.md`. Si el escaneo dijo que sigue siendo la
+   **plantilla sin llenar**, llenala ahora con el usuario: un agente que lee una plantilla vacia
+   la trata como doctrina.
 3. **Escribe las diferencias explicitamente.** No las silencies ni las "corrijas" mentalmente.
 
 Cada diferencia es una de tres cosas, y hay que decidir cual antes de seguir:
@@ -51,23 +82,41 @@ Cada diferencia es una de tres cosas, y hay que decidir cual antes de seguir:
 - la base esta desactualizada → se actualiza `docs/architecture-base.md`
 - violacion real → se convierte en un epic de remediacion
 
-## Fase 3 — PRD brownfield
+## Paso 5 — PRD brownfield, del alcance acordado
 
 `bmad-document-project` para levantar lo que el sistema hace hoy, y luego `bmad-prd` sobre eso.
+Usa como insumo la documentacion que el escaneo encontro y lo que el usuario haya traido de
+fuera del repo: es mas barato corregir un borrador que escribir desde cero.
 
-Regla: el PRD brownfield describe **lo que existe**, no lo que quisieras que existiera. Lo nuevo
-entra despues por `/sw:change`.
+Reglas:
+- el PRD brownfield describe **lo que existe**, no lo que quisieras que existiera; lo nuevo entra
+  despues por `/sw:change`
+- **solo el alcance acordado en el Paso 2.** Si aparece algo fuera, anotalo como pendiente, no lo
+  metas
 
-## Fase 4 — Linea base de specs
+## Paso 6 — Linea base de specs
 
-Para cada capability que ya funciona, escribe su spec en `openspec/specs/<capability>/spec.md`
-con `## Purpose` y sus `### Requirement:` en presente. Esta linea base es contra lo que
-`/sw:change` va a medir el alcance de todo lo que llegue despues; sin ella, el control de
-alcance no tiene contra que comparar.
+Epics y stories del alcance (`bmad-create-epics-and-stories`), y despues el puente:
 
-Verifica: `npx un-specweaver validate`
+```
+npx un-specweaver bridge --strict
+npx un-specweaver validate
+```
 
-## Fase 5 — De aqui en adelante
+Para el codigo que **ya funciona**, los changes que salen describen comportamiento existente: al
+cerrarlos con `npx un-specweaver close --done` pasan a `.un-specweaver/openspec/specs/` y se
+vuelven la linea base. Esa linea base es contra lo que `/sw:change` va a medir el alcance de todo
+lo que llegue despues; sin ella, el control de alcance no tiene contra que comparar.
 
-El proyecto ya esta en el flujo. Lo nuevo entra por `/sw:change`, los tickets por `/sw:ticket`,
-y epics nuevos con `bmad-create-epics-and-stories` + `npx un-specweaver bridge`.
+Si una story describe comportamiento que ya esta implementado y verificado, marca sus tareas y
+cierrala: no vuelvas a construir lo que ya existe. Dilo en voz alta cuando lo hagas.
+
+## Paso 7 — Confirmar y seguir
+
+```
+npx un-specweaver status --open
+```
+
+Muestra al usuario que quedo adoptado, que quedo fuera del alcance a proposito, y cual es el
+siguiente paso. De aqui en adelante: lo nuevo por `/sw:change`, los defectos por `/sw:bug`, los
+tickets por `/sw:ticket`, y ampliar el alcance es volver a este comando sobre otra area.

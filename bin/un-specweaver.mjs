@@ -22,6 +22,7 @@ USO
   npx un-specweaver status [dir]   en que va el proyecto: fases, changes, sprint, requisitos, decisiones
                                    --html escribe .un-specweaver/dashboard.html · --open lo abre · --json
   npx un-specweaver validate       valida todos los specs (envuelve a OpenSpec)
+  npx un-specweaver scan [dir]     escanea un proyecto que ya existe y propone como adoptarlo
   npx un-specweaver memory         estado de la memoria del proyecto
                                    import [proyecto]  trae la memoria de la base global
                                    share [--import]   exporta/trae el formato que git si versiona
@@ -209,6 +210,52 @@ switch (cmd) {
       process.exit(0);
     }
     console.log(renderTerminal(model, lang));
+    process.exit(0);
+  }
+
+  case 'scan': {
+    // Evidencia antes que impresiones: adoptar planeando sobre lo que uno CREE que hace el
+    // codigo es el error tipico, y especificar el sistema entero antes de tocarlo es el otro.
+    const { scan } = await import('../src/scan.mjs');
+    const root = path.resolve(o._[0] || process.cwd());
+    const r = scan(root);
+    if (o.json) { console.log(JSON.stringify(r, null, 2)); process.exit(0); }
+
+    console.log(`\n${r.name} — que hay aqui\n`);
+    const langs = r.code.languages.slice(0, 5).map((l) => `${l.name} (${l.files})`).join(', ');
+    console.log(`  codigo      ${r.code.files} archivo(s)${langs ? `: ${langs}` : ''}`);
+    console.log(`  tests       ${r.code.tests ? `${r.code.tests} archivo(s) de test` : 'no encontre'}`);
+    if (r.stack.length) console.log(`  stack       ${r.stack.map((x) => x.manifest).join(', ')}`);
+    if (r.code.topDirs.length) console.log(`  estructura  ${r.code.topDirs.slice(0, 8).join(', ')}`);
+    console.log(`  docs        ${r.docs.length ? r.docs.slice(0, 4).map((d) => d.file).join(', ') + (r.docs.length > 4 ? ` (+${r.docs.length - 4})` : '') : 'ninguna'}`);
+    if (r.ci.length) console.log(`  CI          ${r.ci.join(', ')}`);
+    if (r.history) console.log(`  historia    ${r.history.commits} commits, ${r.history.authors} autor(es), ${r.history.first} → ${r.history.last}${r.history.recent ? ` · ${r.history.recent} en los ultimos 90 dias` : ' · sin actividad reciente'}`);
+
+    console.log(`\nEstado del metodo\n`);
+    const m = r.method;
+    const mark = (b) => (b ? 'ok  ' : '—   ');
+    console.log(`  ${mark(m.installed)} herramienta montada`);
+    console.log(`  ${mark(m.graph)} mapa del codigo`);
+    console.log(`  ${mark(m.architectureBase === 'llena')} docs/architecture-base.md (${m.architectureBase})`);
+    console.log(`  ${mark(m.prd)} PRD`);
+    console.log(`  ${mark(m.epics)} epics y stories`);
+    console.log(`  ${mark(m.trace)} contratos generados`);
+    console.log(`  ${mark(m.capabilities.length > 0)} linea base${m.capabilities.length ? `: ${m.capabilities.length} capability(s)` : ''}`);
+
+    console.log(`\nPlan propuesto\n`);
+    for (const st of r.plan) {
+      console.log(`  ${st.done ? '✓' : ' '} ${st.title}`);
+      if (!st.done) { console.log(`      ${st.why}`); console.log(`      → ${st.cmd}`); }
+    }
+
+    console.log(`\nLo que el escaneo no puede saber — se decide una vez, al principio\n`);
+    for (const q of r.questions) {
+      console.log(`  • ${q.q}`);
+      console.log(`    ${q.why}`);
+      if (q.options.length) console.log(`    ${q.options.join('  |  ')}`);
+      console.log('');
+    }
+    console.log('  Corre /sw:adopt en tu agente: lee este escaneo, te hace estas preguntas y ejecuta el plan.\n');
     process.exit(0);
   }
 

@@ -93,7 +93,7 @@ las pinea a una version conocida, y aporta la pieza que a ninguna le sobraba.
 | Entender, decidir, descomponer | [BMAD METHOD](https://github.com/bmad-code-org/BMAD-METHOD) |
 | **Traducir** | **el puente de este repositorio** |
 | Contratos y verificacion | [OpenSpec](https://github.com/Fission-AI/OpenSpec) |
-| Construccion, revision, memoria | [Gentle-AI](https://github.com/Gentleman-Programming/gentle-ai) + Engram |
+| Memoria de decisiones | [Engram](https://github.com/Gentleman-Programming/engram) — **una base por proyecto** |
 | Mapa del codigo (impacto, estructura real) | [graphify](https://github.com/safishamsi/graphify) — **solo codigo** |
 
 **La fase 4 es la que no existia.** BMAD llega hasta la historia; OpenSpec arranca en el contrato;
@@ -108,8 +108,10 @@ Ademas la herramienta hace cuatro cosas que suenan menores y no lo son:
   pueda ignorar.
 - **Deja un solo vocabulario.** Los comandos de los vendors se ocultan; queda `/sw:*`. Las skills
   utiles siguen todas disponibles.
-- **Segmenta la memoria por proyecto.** Escribe `.engram/config.json` con el nombre del proyecto,
-  que es lo que todos los servidores de Engram respetan. No es una opcion: siempre pasa.
+- **Aisla el proyecto.** Todo lo que el metodo produce vive en `.un-specweaver/`: specs,
+  planeacion, trazabilidad y **la memoria**. La base de Engram es del proyecto, no una etiqueta
+  sobre una base compartida; borrar la carpeta borra la memoria. Y no escribimos nada en tu
+  `$HOME`: si ya tenias Gentle-AI o Engram instalados, tu configuracion queda intacta.
 - **Acota el mapa del codigo a codigo.** graphify construye un grafo AST del proyecto —
   determinista, sin LLM— y un hook lo reconstruye en cada commit. `.graphifyignore` deja fuera el
   PRD, los specs y la memoria: esas capas tienen otro dueño, y el grafo tiene que ser un testigo
@@ -130,7 +132,7 @@ de paquetes del sistema y un permiso de Homebrew que aplica solo a macOS.
 |---|---|---|
 | 1 | Node.js **20.11+** | **si** |
 | 2 | **Claude Code** u **OpenCode** (al menos uno) | **si** |
-| 3 | Homebrew — **solo macOS** | si, para Gentle-AI |
+| 3 | Homebrew (macOS y Linux) o Go | **solo `/sw:build`**: es como se instala Engram |
 | 4 | git | no, pero sin el no podes revertir |
 | 5 | `uv` (o `pipx`) | **solo `/sw:build`**: es como se instala graphify. Sin el, BMAD tambien va mas lento |
 
@@ -169,7 +171,8 @@ En macOS, si no tenes Homebrew:
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-Homebrew **no es opcional en macOS**: es como se instala Gentle-AI. En Linux no hace falta.
+Homebrew es la via mas simple para instalar Engram, y sirve igual en macOS y en Linux. Sin el,
+`init` usa `go install`.
 
 ### Paso 2 — Un agente (igual en los dos sistemas)
 
@@ -215,28 +218,24 @@ cd mi-proyecto
 npx un-specweaver init
 ```
 
-Hace dos preguntas —idioma y que agentes configurar— y despues instala BMAD, inicializa OpenSpec,
-configura Gentle-AI, segmenta la memoria de Engram y monta graphify. Tarda unos minutos.
+Hace dos preguntas —idioma y que agentes configurar— y despues instala BMAD, inicializa OpenSpec
+dentro de `.un-specweaver/`, instala Engram y lo ata al proyecto, y monta graphify. Tarda unos
+minutos.
 
-**En macOS se va a detener una vez** pidiendo autorizar un tap de Homebrew: Gentle-AI instala
-Engram y GGA desde un tap de terceros, y brew se niega a cargar formulas no confiables.
-**Es una decision de seguridad que la herramienta no toma por nadie.**
+**Se puede detener una vez** pidiendo autorizar una formula de Homebrew: Engram vive en un tap
+de terceros y brew se niega a cargar formulas no confiables. **Es una decision de seguridad que
+la herramienta no toma por nadie** — te da el comando exacto y se detiene:
 
 ```bash
-brew trust gentleman-programming/tap
+brew trust --formula gentleman-programming/tap/engram
 npx un-specweaver init
 ```
 
-Si preferis minimo privilegio, `init` lista exactamente que items autorizar uno por uno.
+Es **un** item, no tres: antes se instalaba Gentle-AI, que arrastraba `engram` y `gga` y cada uno
+pedia su propia ronda de autorizacion.
 
-**En Linux ese paso no existe.** Sin Homebrew se usa el instalador oficial de Gentle-AI, que
-detecta tu gestor de paquetes. Va a pedir confirmacion antes de ejecutar el script remoto
-(`curl | bash`); con `--yes` se salta la confirmacion.
-
-> La ruta de Linux esta implementada y Gentle-AI la soporta oficialmente, pero el flujo completo
-> se probo end-to-end solo en macOS. Si algo falla, `doctor` dice que paso y que bloquea.
-
----
+Sin Homebrew, `init` usa `go install`, la otra via oficial de Engram. Sin ninguno de los dos se
+detiene y te dice que instalar: nunca ejecuta un script remoto.
 
 ### Las dos preguntas de `init`
 
@@ -260,7 +259,7 @@ npx un-specweaver init --lang es --agents claude-code,opencode --yes
 npx un-specweaver doctor
 ```
 
-Todo en `ok`. Si algo falta, dice **que bloquea**: los pasos de Gentle-AI solo impiden
+Todo en `ok`. Si algo falta, dice **que bloquea**: los pasos de memoria y mapa solo impiden
 `/sw:build`; planear funciona sin ellos.
 
 ### Empezar
@@ -340,6 +339,9 @@ npx un-specweaver history [FR-21]     # historia de un requisito, o ranking de l
 npx un-specweaver close [ids|--done]  # cierra stories terminadas: valida y archiva su spec
 npx un-specweaver status [dir]        # en que va: fases, changes, sprint, requisitos, decisiones
 npx un-specweaver status --open       # lo mismo como .un-specweaver/dashboard.html, en el navegador
+npx un-specweaver validate            # valida todos los specs (envuelve a OpenSpec)
+npx un-specweaver migrate             # muda un proyecto de 0.5.x al layout consolidado
+npx un-specweaver reset               # quita TODO lo que la herramienta creo
 npx un-specweaver vendors             # versiones pineadas
 ```
 
@@ -379,7 +381,7 @@ commit — una vista que solo se actualiza cuando alguien se acuerda es una vist
 
 `close` existe porque el cierre dependia de la memoria del agente. `/sw:build` decia "archiva
 cuando este entregado" y en un proyecto real quedaron 22 stories terminadas y **cero archivadas**:
-sin `openspec/specs/` no hay linea base y `/sw:change` no tenia contra que medir el alcance. Ahora
+sin `.un-specweaver/openspec/specs/` no hay linea base y `/sw:change` no tenia contra que medir el alcance. Ahora
 es un comando: por cada change con todas las tareas marcadas corre `openspec validate --strict` y
 `openspec archive`; el que no valida no se archiva. `doctor` y el dashboard avisan mientras haya
 terminadas sin cerrar, y `/sw:build` lo invoca en su paso de cierre.
@@ -398,11 +400,12 @@ nada. El plan y la ejecucion salen del mismo codigo, asi que no puede mentir.
    el paso de graphify se detiene y dice que instalar)
 3. BMAD pineado, alcance del proyecto, solo el modulo de planeacion, idioma configurado
 4. Poda de la frontera
-5. `openspec init` con los agentes detectados
-6. Gentle-AI: binario (brew si esta disponible, si no el script oficial) + configuracion `--scope workspace`
-7. `.engram/config.json` con el nombre del proyecto: la memoria de Engram queda segmentada para
-   todos los agentes. Si una version anterior dejo un servidor `engram --project` en `.mcp.json`,
-   lo retira
+5. BMAD escribe su salida en `.un-specweaver/bmad/` (`--output-folder`)
+5b. `openspec init` **dentro de `.un-specweaver/`**, sin comandos de agente: la superficie son
+   los `/sw:*`, y el CLI envuelve las invocaciones a OpenSpec
+6. Engram: binario (Homebrew o `go install`) — un solo item que autorizar, no tres
+7. `.un-specweaver/bin/engram` (el wrapper que fija la memoria al proyecto) y el servidor de
+   memoria de cada agente apuntando a el. Si tenes el plugin global de Engram, lo dice
 8. graphify pineado (via `uv` o `pipx`), la skill dentro del proyecto para cada agente,
    `.graphifyignore` (solo codigo), los hooks acotados, el grafo AST y el hook de post-commit
 9. Los once comandos `/sw:*` en el formato de cada agente, la skill `un-specweaver` en todos los
@@ -410,23 +413,20 @@ nada. El plan y la ejecucion salen del mismo codigo, asi que no puede mentir.
 
 ### Prerequisitos que la herramienta NO resuelve sola
 
-Gentle-AI instala **Engram** como parte de su propio pipeline, y brew se niega a cargar formulas
-no confiables. `un-specweaver` **detecta cuales faltan y da el comando minimo**, pero no lo ejecuta:
-autorizar una formula le da permiso de correr codigo de instalacion, y esa es una decision del
-usuario.
+Engram vive en un tap de terceros y brew se niega a cargar formulas no confiables.
+`un-specweaver` **detecta lo que falta y da el comando minimo**, pero no lo ejecuta: autorizar
+una formula le da permiso de correr codigo de instalacion, y esa es una decision del usuario.
 
 ```
-! Homebrew no confia en: gentleman-programming/tap/engram
-  corre esto y vuelve a intentar:
-    brew trust --formula gentleman-programming/tap/engram
-    npx un-specweaver init
+! Homebrew no confia en: gentleman-programming/tap/engram (formula)
+  autoriza y vuelve a intentar:
+       brew trust --formula gentleman-programming/tap/engram
+       npx un-specweaver init
 ```
 
-La confianza se mide **por formula, no por tap**: `brew tap-info` reporta un tap como "Untrusted"
-aunque una formula suya si este confiada — verificado en una maquina donde `gentle-ai` instalaba
-bien y `engram` fallaba, con el tap marcado untrusted en ambos casos. Se lee `trust.json` y se pide
-solo lo que falta, en vez de confiar el tap entero (que ademas incluye `gentle-creation`,
-`gentleman-dots` y `gga`).
+La confianza se mide **por item y por tipo**: `brew tap-info` reporta un tap como "Untrusted"
+aunque una formula suya si este confiada, y `engram` esta publicado como formula **y** como cask.
+Se lee `trust.json` y se pide solo lo que falta, en vez de confiar el tap entero.
 
 El paso **falla** en vez de omitirse en silencio: reportar "listo" sobre algo que no ocurrio
 seria mentir.
@@ -438,11 +438,11 @@ seria mentir.
 | Paso | Bloquea |
 |---|---|
 | `bmad`, `bmad-prune`, `openspec`, `layer` | planear (`/sw:new`, `/sw:adopt`) |
-| `gentle-bin`, `gentle-config`, `engram-scope`, `graphify-bin`, `graphify` | **solo** `/sw:build` — planear funciona sin ellos |
+| `engram-bin`, `engram-project`, `graphify-bin`, `graphify` | **solo** `/sw:build` — planear funciona sin ellos |
 | `gitignore`, `dashboard-hook` | nada; higiene del repo y frescura del dashboard |
 
-Sin esa distincion un agente se detiene por Gentle-AI antes siquiera de levantar requerimientos,
-que es exactamente lo que pasaba antes.
+Sin esa distincion un agente se detiene por la memoria o el mapa del codigo antes siquiera de
+levantar requerimientos, que es exactamente lo que pasaba antes.
 
 ### Que va al repo y que no
 
@@ -451,13 +451,11 @@ reemplaza en vez de duplicarlo). En un proyecto real la diferencia es de **499 a
 
 | Al repo | Ignorado |
 |---|---|
-| `openspec/` — los specs son el producto | `_bmad/`, `node_modules/` |
-| `_bmad-output/` — PRD y epics | `.claude/skills/bmad-*/`, `.agents/skills/bmad-*/` |
-| `docs/architecture-base.md` | `.claude/commands/sw/`, `.opencode/commands/sw-*.md` |
-| `.un-specweaver/config.json` (idioma), `trace.json`, `sprint-plan.md`, `changelog.jsonl` | `.un-specweaver/local.json` — agentes, rutas y pasos de **esta** maquina |
-| | `.un-specweaver/dashboard.html` — regenerable |
-| `.engram/config.json` — nombre del proyecto en Engram | `graphify-out/` — AST regenerable; el hook lo reescribe en cada commit |
-| `.graphifyignore` — el alcance del grafo es regla del equipo | `.claude/skills/graphify/`, `.opencode/skills/graphify/` |
+| `.un-specweaver/openspec/` — los specs son el producto | `.un-specweaver/engram/` — memoria: SQLite binario, no se mergea |
+| `.un-specweaver/bmad/` — PRD, epics, memlogs | `.un-specweaver/local.json` — agentes, rutas y pasos de **esta** maquina |
+| `.un-specweaver/config.json` (idioma), `trace.json`, `sprint-plan.md`, `changelog.jsonl` | `.un-specweaver/dashboard.html`, `.un-specweaver/bin/` — regenerables |
+| `docs/architecture-base.md`, `.graphifyignore` | `_bmad/`, `node_modules/`, `graphify-out/` |
+| | `.claude/skills/bmad-*/`, `.claude/commands/sw/`, y sus equivalentes en `.opencode/` |
 
 Se ignora **por patron exacto, nunca `.claude/` entero**: tus propias skills y comandos siguen
 versionados. Un companero clona, corre `npx un-specweaver init`, y reconstituye el tooling desde
@@ -465,30 +463,58 @@ el pin — el repo guarda especificaciones, no dependencias.
 
 ### Que se escribe fuera del proyecto
 
-Casi todo queda dentro. Verificado con snapshot antes/despues: los pasos `bmad`, `openspec`,
-`layer` y `gitignore` **no** tocan `~/.claude` ni `~/.agents`.
-
-Tres excepciones, todas anunciadas antes de correr:
+**Solo binarios.** Ni un archivo de configuracion tuyo se toca: no escribimos en `~/.claude`,
+`~/.agents`, `~/.engram` ni en la config de ningun agente. Si ya tenias Engram o Gentle-AI
+instalados, tu montaje global queda como estaba.
 
 | Paso | Que escribe fuera |
 |---|---|
-| `gentle-bin` | el binario de Gentle-AI (herramienta de sistema, via Homebrew o script oficial) |
-| `gentle-config` | Engram registra su servidor MCP: `~/.engram/`, `~/.claude/mcp/engram.json` y la config de cada agente |
-| `graphify-bin` | el binario de graphify, aislado por `uv tool` o `pipx` (herramienta de sistema) |
+| `engram-bin` | el binario de Engram (herramienta de sistema, via Homebrew o `go install`) |
+| `graphify-bin` | el binario de graphify (aislado por `uv tool` o `pipx`) |
 
-`--scope workspace` cubre los assets de Gentle-AI pero **no** contiene a Engram: la configuracion
-MCP es global por naturaleza. Verificado en una maquina real — la version anterior de este README
-afirmaba lo contrario y era falso.
+La version anterior escribia bastante mas: Gentle-AI registraba `~/.engram/`,
+`~/.claude/mcp/engram.json` y la config MCP de cada agente. Por eso salio del montaje.
 
-Si no querés nada fuera del proyecto, corre `init --skip gentle-bin,gentle-config,graphify-bin,graphify`:
-perdes el SDD, la memoria de decisiones y el mapa del codigo; todo lo demas funciona igual.
+**Un limite que no podemos vencer y por eso se avisa:** si tenes el **plugin de Engram para
+Claude Code**, sus herramientas viven en otro namespace (`mcp__plugin_engram_*`) y siguen
+escribiendo en `~/.engram`. Un servidor de proyecto con el mismo nombre si gana sobre uno de
+alcance de usuario, pero a un plugin no lo vence ninguna configuracion de proyecto. `doctor` lo
+detecta y te da el comando para desactivarlo aqui.
+
+Si no querés nada fuera del proyecto, corre `init --skip engram-bin,graphify-bin`: perdes la
+memoria de decisiones y el mapa del codigo; todo lo demas funciona igual.
+
+### Quitarlo todo
+
+```bash
+npx un-specweaver reset --dry-run    # lista exactamente que borraria
+npx un-specweaver reset              # pide confirmacion escrita
+```
+
+El aislamiento nunca puede ser total —`_bmad/` lo instala el vendor en la raiz, y las skills y
+comandos solo sirven dentro de `.claude/` y `.opencode/`—, asi que al menos quitarlo es **un
+comando**: borra la carpeta del metodo, la instalacion de los vendors, la superficie de los
+agentes, el bloque del `.gitignore` y la linea del hook. Lo tuyo no lo toca: tus skills, tu
+`settings.json` y `docs/architecture-base.md` se quedan.
+
+### Venir de 0.5.x
+
+```bash
+npx un-specweaver migrate --dry-run
+npx un-specweaver migrate
+```
+
+Mueve `openspec/` y `_bmad-output/` dentro de `.un-specweaver/` **con `git mv`** (el historial de
+cada archivo se conserva) y reescribe lo que apuntaba a las rutas viejas: la config de BMAD y el
+origen en `trace.json`. Un proyecto sin migrar **se sigue leyendo**: la herramienta detecta el
+layout anterior y lo usa, porque actualizar no puede romper un proyecto en silencio.
 
 Es idempotente: volver a correrlo omite lo ya hecho.
 
 ## El puente
 
 ```bash
-npx un-specweaver bridge _bmad-output/epics.md
+npx un-specweaver bridge
 npx @fission-ai/openspec validate --all --strict
 ```
 
@@ -542,15 +568,22 @@ Todas verificadas contra los CLIs reales, no contra la documentacion.
 - **`openspec validate --strict` exige el literal `SHALL`/`MUST`** aunque el spec este en espanol.
   El modo por defecto emite prosa espanola con el keyword intacto; `--normative debe` lee mejor
   pero obliga a soltar `--strict`.
-- **La memoria de Engram se segmenta con `.engram/config.json`, no con `--project`.** Engram 1.20
-  resuelve el proyecto por cwd en cada llamada (config → git remote → raiz git → carpeta), y ese
-  archivo es la primera prioridad para **todos** sus servidores: el plugin de Claude Code, el
-  global que registra Gentle-AI, OpenCode y el CLI. La version 0.1.x registraba un segundo
-  servidor `engram mcp --project` en `.mcp.json`; en Claude Code eso convivia con el plugin y el
-  agente veia dos juegos de herramientas de memoria, y OpenCode ni lo leia. El nombre se deriva
-  igual que engram (repo del remote, minusculas) para que lo guardado antes de `init` quede bajo
-  la misma etiqueta. Las lecturas solo cruzan proyectos si el agente pide `all_projects`; la skill
-  y los comandos lo prohiben salvo que el usuario lo pida.
+- **La memoria de Engram se aisla con `ENGRAM_DATA_DIR`, no con `--project`.** Verificado contra
+  engram 1.20: esa variable mueve la **base entera** al proyecto (con `--project` se compartia
+  `~/.engram/engram.db` y solo cambiaba la etiqueta). Exige ruta **absoluta**, y una ruta absoluta
+  en un archivo que va al repo es de una maquina: por eso `init` genera `.un-specweaver/bin/engram`,
+  un wrapper que resuelve su propia ubicacion, y los agentes lo invocan por ruta relativa —
+  Claude Code la resuelve contra la raiz del proyecto y OpenCode fusiona el config del proyecto
+  sobre el global. Limite declarado: el **plugin** de Engram para Claude Code vive en otro
+  namespace y ninguna configuracion de proyecto lo vence; un servidor de proyecto con el mismo
+  nombre si gana sobre uno de alcance de usuario. Se detecta y se avisa.
+- **OpenSpec no busca hacia arriba.** Verificado: con `openspec/` dentro de `.un-specweaver/`,
+  sus comandos fallan desde la raiz y funcionan con `cwd` ahi. Por eso el CLI los envuelve
+  (`un-specweaver validate`, `close`) y los comandos del agente nunca los invocan a mano.
+- **BMAD muda su salida pero no su instalacion.** `--output-folder` lleva PRD, epics y memlogs a
+  `.un-specweaver/bmad/`. Probamos `--directory .un-specweaver` para mudar tambien `_bmad/`: sus
+  skills terminan en `.un-specweaver/.claude/skills/`, donde el agente **no las ve**. Los
+  directorios destino los fija BMAD, asi que `_bmad/` se queda en la raiz, ignorado y regenerable.
 - **El grafo de graphify es solo de codigo, y se instala en el proyecto.** `graphify update` es
   AST puro (determinista, sin LLM, solo extensiones de codigo); en un proyecto sin codigo termina
   en exit 0 sin crear nada, asi que greenfield no rompe `init`. `graphify install --project` deja
@@ -585,9 +618,9 @@ Una sola duena por dato:
 
 | Dato | Duena |
 |---|---|
-| Intencion de producto (el *que* de negocio) | `_bmad-output/` |
-| Contrato de comportamiento (el *que* tecnico) | `openspec/specs/` |
-| Decisiones y rationale (el *por que*) | Engram |
+| Intencion de producto (el *que* de negocio) | `.un-specweaver/bmad/` |
+| Contrato de comportamiento (el *que* tecnico) | `.un-specweaver/openspec/specs/` |
+| Decisiones y rationale (el *por que*) | Engram, en `.un-specweaver/engram/` |
 | Estructura del codigo (el *donde*) | grafo de graphify |
 | Trazabilidad FR ↔ story ↔ change | `.un-specweaver/trace.json` |
 | Historia de un requisito (que cambio y por que) | `.memlog.md` + `sprint-change-proposal-*.md` + `changelog.jsonl`, via `history` |
@@ -596,7 +629,7 @@ Una sola duena por dato:
 ## Desarrollo
 
 ```bash
-npm test                    # 150 tests
+npm test                    # 148 tests
 npm pack                    # ~23 kB
 node bin/un-specweaver.mjs init --dry-run
 ```
@@ -617,6 +650,7 @@ implementando `status()` y `plan()`; `--dry-run`, la idempotencia y `doctor` sal
 | `close` — cerrar stories | **funciona** — valida y archiva; 22 stories cerradas en un proyecto real |
 | Mensajes del CLI bilingües | **funciona**, 86 cadenas, es/en |
 | graphify (mapa del codigo, solo codigo) | **funciona** — instalado, acotado, grafo AST y hook; verificado contra graphify 0.8.37 |
-| Gentle-AI (binario) | **funciona** — instala via Homebrew |
-| Engram (instalacion) | bloqueado por confianza del tap; detectado y reportado con remedio, sin ejecutar |
-| Engram (memoria por proyecto) | **funciona** — `.engram/config.json`, verificado contra engram 1.20 |
+| Engram (instalacion) | **funciona** — Homebrew o `go install`, un solo item que autorizar |
+| Engram (memoria dentro del proyecto) | **funciona** — `ENGRAM_DATA_DIR` + wrapper, verificado contra engram 1.20 |
+| `reset` / `migrate` | **funciona** — probados sobre un proyecto montado y uno de 0.5.x |
+| Gentle-AI | **fuera del montaje**: no se instala ni se configura; si esta en el PATH, sus skills se ofrecen |

@@ -145,9 +145,23 @@ npx un-specweaver adopt --input docs/requisitos.md       # --input es repetible
 | 5 | PRD brownfield **del alcance acordado**, usando tus `inputs/` |
 | 6 | epics → puente → `close`: linea base de lo que ya funciona, sin reconstruir nada |
 
-**Desde aqui los dos flujos son el mismo**: `/sw:change` para requerimientos nuevos, `/sw:bug`
-para defectos, `/sw:ticket` para issues de GitHub, `/sw:build` + `/sw:close` para construir,
-`/sw:status` para ver como va.
+Si ese proyecto **ya venia usando Engram** (una version anterior guardaba la memoria en la base
+global), traela antes de empezar: `npx un-specweaver memory import`.
+[Como funciona](#la-memoria-de-un-proyecto-que-ya-existia).
+
+### Desde aqui los dos flujos son el mismo
+
+| Cuando | Comando |
+|---|---|
+| Llega un requerimiento nuevo | `/sw:change "<req>"` — **pasa por control de alcance** |
+| Aparece un defecto | `/sw:bug "<defecto>"` — sin control de alcance: lo acordado no cambio |
+| Llega un issue de GitHub | `/sw:ticket <n>` — clasifica y enruta a uno de los dos anteriores |
+| Hay que construir | `/sw:build <id>` y despues `/sw:close` |
+| Repartir trabajo | `/sw:sprint` |
+| "¿Como vamos?" | `/sw:status` o `npx un-specweaver status --open` |
+| Compartir las decisiones con el equipo | `npx un-specweaver memory share` + commit ([detalle](#compartir-el-rationale-con-el-equipo)) |
+| Algo se ve raro | `/sw:doctor` |
+| Empezar de nuevo | `npx un-specweaver reset` ([que borra](#quitarlo-todo)) |
 
 ### La diferencia que importa
 

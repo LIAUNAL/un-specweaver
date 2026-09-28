@@ -7,11 +7,35 @@ agente y esperar que acierte, el trabajo baja por fases: cada una produce un art
 que alimenta a la siguiente, y cada linea de codigo se puede rastrear hasta el requisito que la
 justifica.
 
+## Instalar
+
+No hace falta instalar nada ni clonar este repositorio: `npx` descarga el paquete y lo corre.
+
 ```bash
+cd mi-proyecto
 npx un-specweaver init
 ```
 
-macOS y Linux. Claude Code u OpenCode. Espanol o ingles. Nadie necesita clonar este repositorio.
+Si vas a usarlo seguido y prefieres el comando corto (`un-specweaver init` en vez de `npx …`):
+
+```bash
+npm install -g un-specweaver
+```
+
+Con eso queda disponible en cualquier carpeta. Para actualizar, `npm update -g un-specweaver`;
+con `npx` siempre corre la ultima version publicada, asi que ahi no hay que hacer nada.
+
+> `npm install un-specweaver` **dentro** del proyecto tambien funciona, pero no aporta: la
+> herramienta no se importa desde tu codigo, se ejecuta. Queda como una dependencia que nadie usa.
+
+macOS y Linux. Claude Code u OpenCode. Espanol o ingles.
+
+**¿Y ahora?** Depende de lo que tengas:
+
+| | |
+|---|---|
+| **Proyecto desde cero** | `init` y despues `/sw:new` en tu agente → [el flujo completo](#proyecto-desde-cero) |
+| **Proyecto con codigo ya empezado** | `init`, `adopt` y despues `/sw:adopt` → [como engancharlo](#proyecto-con-codigo-ya-empezado) |
 
 ---
 
@@ -80,6 +104,62 @@ Once comandos, un solo vocabulario. En Claude Code se escriben `/sw:new`; en Ope
 | `/sw:status` | ¿como vamos? — abre el **dashboard** (`status --open`) y lo interpreta: que se puede empezar, que esta inestable, que falta cerrar |
 | `/sw:close [id]` | cerrar stories terminadas: validar y archivar su spec. **Terminar no es cerrar** |
 | `/sw:doctor` | salud del entorno y coherencia del flujo |
+
+---
+
+### Proyecto desde cero
+
+```bash
+cd mi-proyecto
+npx un-specweaver init        # dos preguntas: idioma y agentes
+```
+
+Llena `docs/architecture-base.md` —`init` lo deja como plantilla— y abri tu agente ahi:
+
+| | Comando | Que produce |
+|---|---|---|
+| 1 | `/sw:new` | conversando: brief → PRD con FR numerados → arquitectura → UX → epics y stories |
+| 2 | *(dentro de `/sw:new`)* | el puente traduce cada story a un contrato de OpenSpec, mas `trace.json` y el plan de olas |
+| 3 | `/sw:sprint` | que se puede trabajar en paralelo y que no |
+| 4 | `/sw:build <change-id>` | codigo contra el contrato, una story a la vez |
+| 5 | `/sw:close` | valida y archiva: eso pasa a ser la **linea base** |
+
+### Proyecto con codigo ya empezado
+
+```bash
+cd mi-proyecto
+npx un-specweaver init
+npx un-specweaver scan                                   # opcional: mirar la evidencia primero
+npx un-specweaver adopt --input docs/requisitos.md       # --input es repetible
+```
+
+`adopt` te pregunta lo que nadie mas puede contestar, copia tus documentos a `inputs/` y deja el
+**brief de adopcion**. Despues, en tu agente:
+
+| | Que pasa |
+|---|---|
+| 1 | `/sw:adopt` lee el brief. Si no existe, te lo pide |
+| 2 | **confirma el alcance con vos y se detiene si no esta claro** |
+| 3 | mapea el codigo real con graphify |
+| 4 | contrasta la arquitectura real con `docs/architecture-base.md`: las diferencias se escriben, no se corrigen mentalmente |
+| 5 | PRD brownfield **del alcance acordado**, usando tus `inputs/` |
+| 6 | epics → puente → `close`: linea base de lo que ya funciona, sin reconstruir nada |
+
+**Desde aqui los dos flujos son el mismo**: `/sw:change` para requerimientos nuevos, `/sw:bug`
+para defectos, `/sw:ticket` para issues de GitHub, `/sw:build` + `/sw:close` para construir,
+`/sw:status` para ver como va.
+
+### La diferencia que importa
+
+En un proyecto nuevo se especifica **todo**, porque todo esta por construirse. En uno que ya
+existe se especifica **solo el area donde vas a trabajar**: adoptar 2.400 archivos de una vez son
+semanas escribiendo contratos de codigo que quiza nadie mire. Lo que no se especifica hoy no queda
+prohibido, queda pendiente de la story que lo toque, y ampliar es volver a correr `/sw:adopt`
+sobre otra area.
+
+Por eso `adopt` pregunta el alcance primero y `/sw:adopt` no sigue sin respuesta. Y por eso `scan`
+y `adopt` detectan en que caso estas: en una carpeta sin codigo te mandan a `/sw:new`, y en un
+proyecto a medio adoptar el plan marca lo ya hecho y solo propone lo que falta.
 
 ---
 
@@ -264,12 +344,10 @@ Todo en `ok`. Si algo falta, dice **que bloquea**: los pasos de memoria y mapa s
 
 ### Empezar
 
-Abri tu agente en esa carpeta y corre:
+Segun lo que tengas: [proyecto desde cero](#proyecto-desde-cero) o
+[proyecto con codigo ya empezado](#proyecto-con-codigo-ya-empezado).
 
-```
-/sw:new          # Claude Code
-/sw-new          # OpenCode
-```
+En Claude Code los comandos se escriben `/sw:new`; en OpenCode, `/sw-new`.
 
 ---
 
